@@ -3,6 +3,144 @@
 
 # Less is More: Recursive Reasoning with Tiny Networks
 
+## Project development log
+
+### 2026-08-17 - Repository setup and verified CPU foundation
+
+This section records the exact state of the student project so that work can
+resume without reconstructing earlier decisions.
+
+#### Project direction and hardware decision
+
+- The course project definition, the first proposal, and the final concise
+  proposal were reviewed. The current implementation direction is the focused
+  proposal: **selective attention over the latent history of TRM**.
+- Target laptop: Windows 11, Intel Core i7-1355U, 16 GB RAM, Intel Iris Xe,
+  no NVIDIA/CUDA GPU, and a 1 TB NVMe SSD.
+- The upstream repository states that even its smallest full Sudoku experiment
+  uses an L40S GPU with 48 GB memory for roughly 18 hours. Therefore, full
+  paper-scale reproduction is not considered practical on this laptop.
+- Agreed strategy: all development, unit tests, smoke tests, and reduced CPU
+  pilots must run locally. Full multi-model/multi-seed experiments remain an
+  optional cloud-GPU path and must not be silently presented as local results.
+
+#### Git and GitHub setup
+
+- Fork created at
+  <https://github.com/Iliyabr/trm-latent-history-attention>.
+- Local `origin` points to the fork.
+- Local `upstream` points to
+  <https://github.com/SamsungSAILMontreal/TinyRecursiveModels>.
+- `main` still matches the upstream-derived fork and was intentionally left
+  unchanged.
+- Development branch created: `codex/cpu-foundation`.
+- CPU foundation commit: `268d883 Add verified CPU-only local workflow`.
+- The branch was successfully pushed to
+  `origin/codex/cpu-foundation` and is tracking that remote branch.
+- Stopping point: the Pull Request had **not yet been created or merged**.
+  Resume by opening
+  <https://github.com/Iliyabr/trm-latent-history-attention/pull/new/codex/cpu-foundation>.
+
+#### Environment created and verified
+
+- Conda environment: `trm-cpu`.
+- Python inside the environment: `3.12.13`.
+- PyTorch: `2.7.0+cpu`.
+- CUDA availability: `False`.
+- CPU smoke configuration uses 8 PyTorch threads.
+- The first Conda attempt through `conda-forge` failed because of a temporary
+  DNS resolution problem. Creation succeeded through the official `defaults`
+  channel with `--override-channels`.
+- The original requirements were not installed because they pin a CUDA build
+  and include Triton. The tested local dependencies are recorded in
+  `requirements-cpu.txt`.
+- NumPy was missing from the upstream requirements even though the data loader
+  imports it. `numpy==1.26.4` was added to the CPU requirements after the first
+  smoke attempt exposed the omission.
+
+#### Code and configuration changes
+
+- `pretrain.py` was changed from hard-coded CUDA execution to configurable
+  `auto`/CPU/CUDA device handling.
+- Tensor batches, model construction, initial carry, evaluation buffers, and
+  checkpoint loading now use the selected device instead of `.cuda()` or a
+  fixed `map_location="cuda"`.
+- CPU data loading disables pinned memory and supports zero worker processes,
+  which is safer and lighter on Windows.
+- Model compilation can be disabled. It is disabled in the local CPU smoke
+  configuration.
+- PyTorch `AdamW` can be selected for CPU runs, so the optional `adam-atan2`
+  package is not required locally. The original optimizer remains the default
+  for upstream-compatible GPU configurations.
+- W&B runs can be disabled; the local configuration requires no account or
+  login.
+- Distributed CPU execution is explicitly rejected by this entry point instead
+  of falling into the upstream NCCL/CUDA path.
+- Added `config/arch/trm_cpu.yaml`: a deliberately tiny float32 TRM with hidden
+  size 64, one layer, one inner cycle, one outer cycle, four heads, and at most
+  two halting steps.
+- Added `config/cfg_cpu_smoke.yaml`: batch size 1, two epochs, AdamW, no model
+  compilation, no W&B sync, no data-loader workers, and CPU-only execution.
+- Added `scripts/create_tiny_sudoku_dataset.py`: creates a deterministic toy
+  dataset with 8 training puzzles and 4 test puzzles. This dataset validates the
+  pipeline only and must never be used as a research result.
+- Added `.gitignore` rules for generated datasets, checkpoints, logs, W&B data,
+  caches, virtual environments, and large model files.
+- Added `CPU_LOCAL.md` with the exact Windows/Conda setup and execution commands.
+- Added `requirements-cpu.txt`, intentionally excluding CUDA, Triton, and
+  `adam-atan2`.
+
+#### Validation completed
+
+- Python syntax compilation passed for `pretrain.py` and the tiny dataset
+  generator.
+- The deterministic toy dataset was generated successfully under
+  `data/sudoku-tiny/`; `data/` is ignored by Git.
+- A complete CPU smoke run succeeded with:
+
+  ```powershell
+  conda run -n trm-cpu python pretrain.py --config-name cfg_cpu_smoke
+  ```
+
+- Observed result: 16 training steps completed, followed by two evaluation
+  passes. Each evaluation processed all four test puzzles with two inference
+  steps per puzzle batch.
+- A small checkpoint was written under
+  `checkpoints/trm-cpu-smoke/local-smoke/`; checkpoints are ignored by Git.
+- Final runtime line confirmed `Runtime device: cpu`, PyTorch `2.7.0+cpu`, and
+  8 threads. No CUDA path was used.
+
+#### Explicitly not completed yet
+
+- The Pull Request from `codex/cpu-foundation` to `main` has not been created or
+  merged.
+- The proposed latent-history attention module has not been implemented yet.
+- Unit tests for history attention, causal masking, gradients, caching, and
+  checkpoint compatibility have not been written yet.
+- The official Sudoku-Extreme dataset has not been downloaded for this fork.
+- No real baseline, pilot, ablation, Maze, multi-seed, or statistical experiment
+  has been run. The only run so far is the synthetic smoke test.
+
+#### Recommended next session
+
+1. Create and review the pending Pull Request, then merge it into `main`.
+2. Add a reduced but scientifically meaningful CPU pilot configuration separate
+   from the smoke test.
+3. Add shape/gradient tests around the unchanged TRM baseline.
+4. Implement the low-rank causal `HistoryAttention` module on a new feature
+   branch.
+5. Compare the selective-history model first against original TRM and uniform
+   history averaging before expanding to expensive ablations.
+
+To reopen the current local state before the Pull Request is merged:
+
+```powershell
+cd "C:\Users\iliya\OneDrive\Documents\ChatGPT\TRM Project"
+conda activate trm-cpu
+git switch codex/cpu-foundation
+git status
+```
+
 This is the codebase for the paper: "Less is More: Recursive Reasoning with Tiny Networks". TRM is a recursive reasoning approach that achieves amazing scores of 45% on ARC-AGI-1 and 8% on ARC-AGI-2 using a tiny 7M parameters neural network.
 
 [Paper](https://arxiv.org/abs/2510.04871)

@@ -23,6 +23,10 @@ Tiny Recursion Model (TRM) recursively improves its predicted answer y with a ti
 
 ### Requirements
 
+> **CPU-only Windows users:** use the tested local workflow in
+> [CPU_LOCAL.md](CPU_LOCAL.md). It avoids CUDA, Triton, large batches, and online
+> experiment logging. The commands below are the original GPU workflow.
+
 Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).
 
 - Python 3.10 (or similar)

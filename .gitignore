@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+
+# Experiment artifacts
+data/
+checkpoints/
+outputs/
+wandb/
+results/raw/
+*.pt
+*.pth
+*.ckpt
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

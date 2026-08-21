@@ -10,6 +10,7 @@ import random
 from models.common import trunc_normal_init_
 from models.layers import rms_norm, LinearSwish, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
 from models.sparse_embedding import CastedSparseEmbedding
+from models.history import build_history_aggregator
 
 IGNORE_LABEL_ID = -100
 
@@ -70,6 +71,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # Phase 2: record detached z_H states across outer reasoning steps.
     # Recording is inert: no history state is consumed by the model yet.
     history_enabled: bool = False
+    history_aggregator: str = "none"
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -157,6 +159,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # Reasoning Layers
         self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
+
+        # Pluggable latent-history aggregation.
+        # The default "none" implementation is parameter-free and identity.
+        self.history_aggregator = build_history_aggregator(
+            self.config.history_aggregator
+        )
 
         # Initial states
         self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
@@ -279,6 +287,21 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         for _L_step in range(self.config.L_cycles):
             z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
         z_H = self.L_level(z_H, z_L, **seq_info)
+
+        # Optional history aggregation.
+        #
+        # IMPORTANT: carry.history_z_H contains only states from STRICTLY
+        # PREVIOUS outer reasoning steps. The current state is appended only
+        # after aggregation below, preserving causal history semantics.
+        if self.config.history_enabled:
+            assert carry.history_z_H is not None
+            assert carry.history_lengths is not None
+
+            z_H = self.history_aggregator(
+                current_z=z_H,
+                history_z=carry.history_z_H,
+                history_lengths=carry.history_lengths,
+            )
 
         # LM Outputs
         z_H_detached = z_H.detach()

@@ -222,3 +222,31 @@ def test_history_reset_isolation_cpu():
             )
 
     print("P2-A HISTORY RESET ISOLATION PASS")
+
+def test_no_history_aggregator_contract_cpu():
+    device = torch.device("cpu")
+
+    base_cfg = load_config(history_enabled=False)
+    hist_cfg = load_config(history_enabled=True)
+
+    metadata, batch = first_dev_batch(base_cfg)
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    base_model, _, _ = create_model(
+        base_cfg, metadata, rank=0, world_size=1, device=device
+    )
+    hist_model, _, _ = create_model(
+        hist_cfg, metadata, rank=0, world_size=1, device=device
+    )
+
+    # The identity history path must add zero trainable parameters.
+    base_params = sum(p.numel() for p in base_model.parameters())
+    hist_params = sum(p.numel() for p in hist_model.parameters())
+
+    assert base_params == hist_params
+
+    aggregator = hist_model.model.inner.history_aggregator
+    assert aggregator.__class__.__name__ == "NoHistoryAggregator"
+    assert sum(p.numel() for p in aggregator.parameters()) == 0
+
+    print("P2-B NO-HISTORY CONTRACT PASS")

@@ -18,6 +18,11 @@ class TinyRecursiveReasoningModel_ACTV1InnerCarry:
     z_H: torch.Tensor
     z_L: torch.Tensor
 
+    # Phase 2: optional detached outer-step latent history.
+    # This is recording-only for now; it must not affect vanilla computation.
+    history_z_H: Optional[torch.Tensor] = None
+    history_lengths: Optional[torch.Tensor] = None
+
 
 @dataclass
 class TinyRecursiveReasoningModel_ACTV1Carry:
@@ -61,6 +66,10 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     mlp_t: bool = False # use mlp on L instead of transformer
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
+
+    # Phase 2: record detached z_H states across outer reasoning steps.
+    # Recording is inert: no history state is consumed by the model yet.
+    history_enabled: bool = False
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -182,15 +191,71 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return self.embed_scale * embedding
 
     def empty_carry(self, batch_size: int):
+        seq_len = self.config.seq_len + self.puzzle_emb_len
+        device = self.H_init.device
+
+        history_z_H = None
+        history_lengths = None
+
+        if self.config.history_enabled:
+            history_z_H = torch.zeros(
+                batch_size,
+                self.config.halt_max_steps,
+                seq_len,
+                self.config.hidden_size,
+                dtype=self.forward_dtype,
+                device=device,
+            )
+            history_lengths = torch.zeros(
+                batch_size,
+                dtype=torch.int32,
+                device=device,
+            )
+
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
-            z_H=torch.empty(batch_size, self.config.seq_len + self.puzzle_emb_len, self.config.hidden_size, dtype=self.forward_dtype),
-            z_L=torch.empty(batch_size, self.config.seq_len + self.puzzle_emb_len, self.config.hidden_size, dtype=self.forward_dtype),
+            z_H=torch.empty(
+                batch_size,
+                seq_len,
+                self.config.hidden_size,
+                dtype=self.forward_dtype,
+                device=device,
+            ),
+            z_L=torch.empty(
+                batch_size,
+                seq_len,
+                self.config.hidden_size,
+                dtype=self.forward_dtype,
+                device=device,
+            ),
+            history_z_H=history_z_H,
+            history_lengths=history_lengths,
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry):
+        history_z_H = carry.history_z_H
+        history_lengths = carry.history_lengths
+
+        if self.config.history_enabled:
+            assert history_z_H is not None
+            assert history_lengths is not None
+
+            # A reused batch slot must never inherit history from a previous puzzle.
+            history_z_H = torch.where(
+                reset_flag.view(-1, 1, 1, 1),
+                torch.zeros_like(history_z_H),
+                history_z_H,
+            )
+            history_lengths = torch.where(
+                reset_flag,
+                torch.zeros_like(history_lengths),
+                history_lengths,
+            )
+
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
             z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
             z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            history_z_H=history_z_H,
+            history_lengths=history_lengths,
         )
 
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
@@ -216,7 +281,43 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         z_H = self.L_level(z_H, z_L, **seq_info)
 
         # LM Outputs
-        new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
+        z_H_detached = z_H.detach()
+        z_L_detached = z_L.detach()
+
+        history_z_H = carry.history_z_H
+        history_lengths = carry.history_lengths
+
+        if self.config.history_enabled:
+            assert history_z_H is not None
+            assert history_lengths is not None
+
+            # Record only AFTER the current state has been computed.
+            # A future HistoryAttention module can therefore consume only
+            # states from strictly earlier outer reasoning steps.
+            history_z_H = history_z_H.clone()
+            history_lengths = history_lengths.clone()
+
+            batch_indices = torch.arange(
+                z_H.shape[0],
+                device=z_H.device,
+            )
+            history_slots = history_lengths.clamp(
+                max=self.config.halt_max_steps - 1
+            ).to(torch.long)
+
+            history_z_H[batch_indices, history_slots] = z_H_detached
+
+            history_lengths = torch.clamp(
+                history_lengths + 1,
+                max=self.config.halt_max_steps,
+            )
+
+        new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(
+            z_H=z_H_detached,
+            z_L=z_L_detached,
+            history_z_H=history_z_H,
+            history_lengths=history_lengths,
+        )
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
         q_logits = self.q_head(z_H[:, 0]).to(torch.float32) # Q-head; uses the first puzzle_emb position
         return new_carry, output, (q_logits[..., 0], q_logits[..., 1])

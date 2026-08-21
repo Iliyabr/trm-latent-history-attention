@@ -16,7 +16,7 @@ venv/
 .vscode/
 
 # Experiment artifacts
-data/
+/data/
 checkpoints/
 outputs/
 wandb/
@@ -29,3 +29,6 @@ results/raw/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Raw baseline evaluation metrics
+results/baseline/**/metrics_step_*.json

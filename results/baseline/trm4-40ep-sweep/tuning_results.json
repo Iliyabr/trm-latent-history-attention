@@ -1,0 +1,103 @@
+{
+  "study": "TRM-4 / 40-epoch controlled baseline tuning",
+  "method": "One-factor-at-a-time sweep. All non-tested hyperparameters are held fixed.",
+  "fixed_config": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "eval_interval": 5,
+    "seed": 0,
+    "global_batch_size": 4,
+    "optimizer": "adamw"
+  },
+  "reference_config": {
+    "lr": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1
+  },
+  "experiments": [
+    {
+      "name": "reference",
+      "factor": "reference",
+      "value": "lr=1e-3, hidden_size=64, L_cycles=1",
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.4583950340747833,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.3579128980636597,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 149.43812329997309
+    },
+    {
+      "name": "lr-3e-4",
+      "factor": "learning_rate",
+      "value": 0.0003,
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.45629626512527466,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.3707091808319092,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 157.5321099999128
+    },
+    {
+      "name": "lr-3e-3",
+      "factor": "learning_rate",
+      "value": 0.003,
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.4287036955356598,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.4324769973754883,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 236.79849299998023
+    },
+    {
+      "name": "hidden-96",
+      "factor": "hidden_size",
+      "value": 96,
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.4287654161453247,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.4118303060531616,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 270.44011819991283
+    },
+    {
+      "name": "hidden-128",
+      "factor": "hidden_size",
+      "value": 128,
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.4304938018321991,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.4113938808441162,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 367.6282079999801
+    },
+    {
+      "name": "Lcycles-2",
+      "factor": "L_cycles",
+      "value": 2,
+      "status": "completed",
+      "step": 10000,
+      "accuracy": 0.4344444274902344,
+      "exact_accuracy": 0.0,
+      "lm_loss": 1.4022026062011719,
+      "q_halt_accuracy": 1.0,
+      "q_halt_loss": 0.0,
+      "steps": 4.0,
+      "runtime_seconds": 272.5537518999772
+    }
+  ]
+}

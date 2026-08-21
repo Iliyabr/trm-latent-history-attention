@@ -1,6 +1,7 @@
 from typing import Optional, Any, Sequence, List
 from dataclasses import dataclass
 import os
+import json
 import math
 import yaml
 import shutil
@@ -50,6 +51,7 @@ class PretrainConfig(pydantic.BaseModel):
     # Data
     data_paths: List[str]
     data_paths_test: List[str] = []
+    eval_split: str = "test"
     # Evaluators
     evaluators: List[EvaluatorConfig] = []
 
@@ -74,6 +76,7 @@ class PretrainConfig(pydantic.BaseModel):
     run_name: Optional[str] = None
     load_checkpoint: Optional[str] = None
     checkpoint_path: Optional[str] = None
+    metrics_dir: Optional[str] = None
 
     # Extras
     seed: int = 0
@@ -283,17 +286,27 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig, device: torch.devi
         # Load state dict
         state_dict = torch.load(config.load_checkpoint, map_location=device)
 
-        # Resize and reset puzzle emb if needed
-        puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
-        expected_shape: torch.Size = model.model.puzzle_emb.weights.shape  # type: ignore
-        if puzzle_emb_name in state_dict:
-            puzzle_emb = state_dict[puzzle_emb_name]
-            if puzzle_emb.shape != expected_shape:
-                print(f"Resetting puzzle embedding as shape is different. Found {puzzle_emb.shape}, Expected {expected_shape}")
-                # Re-initialize using mean
-                state_dict[puzzle_emb_name] = (
-                    torch.mean(puzzle_emb, dim=0, keepdim=True).expand(expected_shape).contiguous()
-                )
+        # Resize and reset puzzle embedding only when this architecture uses one.
+        puzzle_emb_ndim = int(
+            (config.arch.__pydantic_extra__ or {}).get("puzzle_emb_ndim", 0)
+        )
+
+        if puzzle_emb_ndim > 0:
+            puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
+            expected_shape: torch.Size = model.model.puzzle_emb.weights.shape  # type: ignore
+
+            if puzzle_emb_name in state_dict:
+                puzzle_emb = state_dict[puzzle_emb_name]
+                if puzzle_emb.shape != expected_shape:
+                    print(
+                        f"Resetting puzzle embedding as shape is different. "
+                        f"Found {puzzle_emb.shape}, Expected {expected_shape}"
+                    )
+                    state_dict[puzzle_emb_name] = (
+                        torch.mean(puzzle_emb, dim=0, keepdim=True)
+                        .expand(expected_shape)
+                        .contiguous()
+                    )
         model.load_state_dict(state_dict, assign=True)
 
 
@@ -614,7 +627,7 @@ def launch(hydra_config: DictConfig):
 
     train_loader, train_metadata = create_dataloader(config, "train", test_set_mode=False, epochs_per_iter=train_epochs_per_iter, global_batch_size=config.global_batch_size, rank=RANK, world_size=WORLD_SIZE, device=device)
     try:
-        eval_loader,  eval_metadata  = create_dataloader(config, "test", test_set_mode=True, epochs_per_iter=1, global_batch_size=config.global_batch_size, rank=RANK, world_size=WORLD_SIZE, device=device)
+        eval_loader,  eval_metadata  = create_dataloader(config, config.eval_split, test_set_mode=True, epochs_per_iter=1, global_batch_size=config.global_batch_size, rank=RANK, world_size=WORLD_SIZE, device=device)
     except:
         print("NO EVAL DATA FOUND")
         eval_loader = eval_metadata = None
@@ -681,6 +694,27 @@ def launch(hydra_config: DictConfig):
 
             if RANK == 0 and metrics is not None:
                 wandb.log(metrics, step=train_state.step)
+
+                if config.metrics_dir is not None:
+                    os.makedirs(config.metrics_dir, exist_ok=True)
+                    metrics_file = os.path.join(
+                        config.metrics_dir,
+                        f"metrics_step_{train_state.step}.json",
+                    )
+                    metrics_record = {
+                        "run_name": config.run_name,
+                        "step": train_state.step,
+                        "eval_split": config.eval_split,
+                        "metrics": metrics,
+                    }
+                    with open(metrics_file, "w", encoding="utf-8") as f:
+                        json.dump(
+                            metrics_record,
+                            f,
+                            indent=2,
+                            default=lambda x: x.item() if hasattr(x, "item") else str(x),
+                        )
+                    print(f"SAVED METRICS: {metrics_file}")
                 
             ############ Checkpointing
             if RANK == 0:

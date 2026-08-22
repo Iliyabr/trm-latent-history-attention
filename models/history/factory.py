@@ -3,6 +3,7 @@
 from .base import HistoryAggregator
 from .none import NoHistoryAggregator
 from .uniform import UniformMeanHistory
+from .recency import RecencyWeightedHistory
 
 
 def build_history_aggregator(name: str) -> HistoryAggregator:
@@ -16,7 +17,10 @@ def build_history_aggregator(name: str) -> HistoryAggregator:
     if normalized in {"uniform", "uniform_mean", "mean"}:
         return UniformMeanHistory()
 
+    if normalized in {"recency", "recency_weighted", "exponential_recency"}:
+        return RecencyWeightedHistory()
+
     raise ValueError(
         f"Unknown history aggregator: {name!r}. "
-        "Available aggregators: none, uniform"
+        "Available aggregators: none, uniform, recency"
     )

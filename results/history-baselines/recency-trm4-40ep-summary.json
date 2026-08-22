@@ -1,0 +1,56 @@
+﻿{
+  "experiment": "recency-trm4-40ep",
+  "status": "completed",
+  "role": "parameter-free non-attention latent-history baseline",
+  "configuration": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "seed": 0,
+    "global_batch_size": 4,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1,
+    "history_enabled": true,
+    "history_aggregator": "recency",
+    "recency_half_life_outer_steps": 1
+  },
+  "vanilla_reference": {
+    "accuracy": 0.4583950341,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3579128981
+  },
+  "uniform_reference": {
+    "accuracy": 0.4564197659,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3080960512
+  },
+  "recency_final": {
+    "step": 10000,
+    "accuracy": 0.4720987976,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.2749981880
+  },
+  "difference_vs_vanilla": {
+    "accuracy_absolute": 0.0137037635,
+    "accuracy_percentage_points": 1.37037635,
+    "lm_loss_absolute": -0.0829147101
+  },
+  "difference_vs_uniform": {
+    "accuracy_absolute": 0.0156790317,
+    "accuracy_percentage_points": 1.56790317,
+    "lm_loss_absolute": -0.0330978632
+  },
+  "trajectory": [
+    {"step": 1250, "accuracy": 0.430000, "lm_loss": 1.450773},
+    {"step": 2500, "accuracy": 0.442407, "lm_loss": 1.400714},
+    {"step": 3750, "accuracy": 0.450000, "lm_loss": 1.373880},
+    {"step": 5000, "accuracy": 0.455617, "lm_loss": 1.333675},
+    {"step": 6250, "accuracy": 0.460741, "lm_loss": 1.305864},
+    {"step": 7500, "accuracy": 0.465988, "lm_loss": 1.299055},
+    {"step": 8750, "accuracy": 0.467469, "lm_loss": 1.290451},
+    {"step": 10000, "accuracy": 0.472099, "lm_loss": 1.274998}
+  ],
+  "development_interpretation": "Under the matched seed-0 TRM-4 setting, parameter-free RecencyWeightedHistory improved final development accuracy by approximately 1.37 percentage points over vanilla TRM and reduced language-model loss. The development accuracy advantage was present throughout the recorded training trajectory and was not limited to the final checkpoint.",
+  "scientific_note": "Because the method adds zero trainable parameters, the observed seed-0 improvement cannot be attributed simply to increased trainable model capacity.",
+  "statistical_caveat": "This is a single-seed development result. It does not establish statistical superiority. Multi-seed paired evaluation is required before final claims."
+}

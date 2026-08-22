@@ -115,3 +115,105 @@ def test_uniform_history_integration_cpu():
 
 if __name__ == "__main__":
     test_uniform_history_integration_cpu()
+
+def test_recency_history_integration_cpu():
+    device = torch.device("cpu")
+
+    none_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="none",
+    )
+    recency_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="recency",
+    )
+
+    metadata, batch = first_dev_batch(none_cfg)
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    none_model, _, _ = create_model(
+        none_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+    recency_model, _, _ = create_model(
+        recency_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+
+    none_model.eval()
+    recency_model.eval()
+
+    none_params = sum(p.numel() for p in none_model.parameters())
+    recency_params = sum(p.numel() for p in recency_model.parameters())
+    assert none_params == recency_params
+
+    none_carry = none_model.initial_carry(batch)
+    recency_carry = recency_model.initial_carry(batch)
+
+    with torch.inference_mode():
+        # Step 1: no previous history, so recency aggregation is identity.
+        none_carry, _, _, none_out_1, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        recency_carry, _, _, recency_out_1, _ = recency_model(
+            carry=recency_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        assert torch.equal(
+            none_out_1["logits"],
+            recency_out_1["logits"],
+        )
+        assert torch.equal(
+            none_carry.inner_carry.z_H,
+            recency_carry.inner_carry.z_H,
+        )
+
+        previous_z = recency_carry.inner_carry.history_z_H[:, 0].clone()
+
+        # Step 2: newest historical state has weight 0.5,
+        # current state has weight 1.0.
+        none_carry, _, _, _, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        recency_carry, _, _, recency_out_2, _ = recency_model(
+            carry=recency_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        expected_recency_z = (
+            none_carry.inner_carry.z_H + 0.5 * previous_z
+        ) / 1.5
+
+        assert torch.allclose(
+            recency_carry.inner_carry.z_H,
+            expected_recency_z,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+        assert torch.isfinite(recency_out_2["logits"]).all()
+
+        assert torch.equal(
+            recency_carry.inner_carry.history_lengths,
+            torch.full(
+                (4,),
+                2,
+                dtype=torch.int32,
+                device=device,
+            ),
+        )
+
+    print("RECENCY HISTORY TRM INTEGRATION PASS")

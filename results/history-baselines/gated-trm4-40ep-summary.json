@@ -1,0 +1,65 @@
+﻿{
+  "experiment": "gated-trm4-40ep",
+  "status": "completed",
+  "role": "learned scalar-gated latent-history baseline",
+  "configuration": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "seed": 0,
+    "global_batch_size": 4,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1,
+    "history_enabled": true,
+    "history_aggregator": "gated",
+    "extra_trainable_parameters": 1,
+    "initial_gate": 0.5
+  },
+  "vanilla_reference": {
+    "accuracy": 0.4583950341,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3579128981
+  },
+  "uniform_reference": {
+    "accuracy": 0.4564197659,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3080960512
+  },
+  "recency_reference": {
+    "accuracy": 0.4720987976,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.2749981880
+  },
+  "gated_final": {
+    "step": 10000,
+    "accuracy": 0.4655555785,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.2613104582,
+    "gate_logit": -1.2286002636,
+    "gate_current_state_weight": 0.2264265120,
+    "gate_history_weight": 0.7735734880
+  },
+  "difference_vs_vanilla": {
+    "accuracy_absolute": 0.0071605444,
+    "accuracy_percentage_points": 0.71605444,
+    "lm_loss_absolute": -0.0966024399
+  },
+  "difference_vs_recency": {
+    "accuracy_absolute": -0.0065432191,
+    "accuracy_percentage_points": -0.65432191,
+    "lm_loss_absolute": -0.0136877298
+  },
+  "trajectory": [
+    {"step": 1250, "accuracy": 0.429383, "lm_loss": 1.440638},
+    {"step": 2500, "accuracy": 0.444074, "lm_loss": 1.390402},
+    {"step": 3750, "accuracy": 0.450185, "lm_loss": 1.341168},
+    {"step": 5000, "accuracy": 0.456049, "lm_loss": 1.308107},
+    {"step": 6250, "accuracy": 0.462407, "lm_loss": 1.288539},
+    {"step": 7500, "accuracy": 0.464753, "lm_loss": 1.274310},
+    {"step": 8750, "accuracy": 0.463519, "lm_loss": 1.268263},
+    {"step": 10000, "accuracy": 0.465556, "lm_loss": 1.261310}
+  ],
+  "development_interpretation": "Under the matched seed-0 TRM-4 setting, GatedHistory improved final development accuracy over vanilla TRM and achieved the lowest final language-model loss among the tested non-attention methods. The learned scalar gate moved substantially from its initial value of 0.5 toward heavier reliance on latent history.",
+  "scientific_note": "The final gate assigned approximately 22.6 percent weight to the current state and 77.4 percent to mean latent history. This is a descriptive observation from one training run and should not yet be interpreted as a general property of the method.",
+  "statistical_caveat": "This is a single-seed development result. It does not establish statistical superiority, degradation, or equivalence. Multi-seed paired evaluation is required before final claims."
+}

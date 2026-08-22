@@ -4,6 +4,7 @@ from .base import HistoryAggregator
 from .none import NoHistoryAggregator
 from .uniform import UniformMeanHistory
 from .recency import RecencyWeightedHistory
+from .gated import GatedHistory
 
 
 def build_history_aggregator(name: str) -> HistoryAggregator:
@@ -20,7 +21,10 @@ def build_history_aggregator(name: str) -> HistoryAggregator:
     if normalized in {"recency", "recency_weighted", "exponential_recency"}:
         return RecencyWeightedHistory()
 
+    if normalized in {"gated", "gated_history", "scalar_gate"}:
+        return GatedHistory()
+
     raise ValueError(
         f"Unknown history aggregator: {name!r}. "
-        "Available aggregators: none, uniform, recency"
+        "Available aggregators: none, uniform, recency, gated"
     )

@@ -217,3 +217,117 @@ def test_recency_history_integration_cpu():
         )
 
     print("RECENCY HISTORY TRM INTEGRATION PASS")
+
+def test_gated_history_integration_cpu():
+    device = torch.device("cpu")
+
+    none_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="none",
+    )
+    gated_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="gated",
+    )
+
+    # Old vanilla checkpoints do not contain the new gate parameter.
+    # For this integration test, create both models fresh and synchronize
+    # all shared parameters explicitly.
+    none_cfg.load_checkpoint = None
+    gated_cfg.load_checkpoint = None
+
+    metadata, batch = first_dev_batch(none_cfg)
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    none_model, _, _ = create_model(
+        none_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+    gated_model, _, _ = create_model(
+        gated_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+
+    missing, unexpected = gated_model.load_state_dict(
+        none_model.state_dict(),
+        strict=False,
+    )
+
+    assert len(unexpected) == 0
+    assert len(missing) == 1
+    assert missing[0].endswith("history_aggregator.gate_logit")
+
+    none_model.eval()
+    gated_model.eval()
+
+    none_params = sum(p.numel() for p in none_model.parameters())
+    gated_params = sum(p.numel() for p in gated_model.parameters())
+
+    assert gated_params == none_params + 1
+
+    aggregator = gated_model.model.inner.history_aggregator
+    assert aggregator.gate_logit.numel() == 1
+    assert torch.allclose(
+        torch.sigmoid(aggregator.gate_logit),
+        torch.tensor(0.5, device=device),
+    )
+
+    none_carry = none_model.initial_carry(batch)
+    gated_carry = gated_model.initial_carry(batch)
+
+    with torch.inference_mode():
+        # Step 1: empty history means exact identity.
+        none_carry, _, _, none_out_1, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        gated_carry, _, _, gated_out_1, _ = gated_model(
+            carry=gated_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        assert torch.equal(
+            none_out_1["logits"],
+            gated_out_1["logits"],
+        )
+        assert torch.equal(
+            none_carry.inner_carry.z_H,
+            gated_carry.inner_carry.z_H,
+        )
+
+        previous_z = gated_carry.inner_carry.history_z_H[:, 0].clone()
+
+        # Step 2: initial gate is 0.5 and mean history contains z_1 only.
+        none_carry, _, _, _, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        gated_carry, _, _, gated_out_2, _ = gated_model(
+            carry=gated_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        expected_gated_z = (
+            none_carry.inner_carry.z_H + previous_z
+        ) / 2.0
+
+        assert torch.allclose(
+            gated_carry.inner_carry.z_H,
+            expected_gated_z,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+        assert torch.isfinite(gated_out_2["logits"]).all()
+
+    print("GATED HISTORY TRM INTEGRATION PASS")

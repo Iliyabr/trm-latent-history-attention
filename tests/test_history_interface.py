@@ -9,7 +9,7 @@ from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_config(history_enabled: bool) -> PretrainConfig:
+def load_config(history_enabled: bool, history_aggregator: str = "none") -> PretrainConfig:
     cfg = yaml.safe_load(
         (ROOT / "config" / "cfg_baseline_v2.yaml").read_text(encoding="utf-8")
     )
@@ -22,6 +22,7 @@ def load_config(history_enabled: bool) -> PretrainConfig:
 
     arch["halt_max_steps"] = 4
     arch["history_enabled"] = history_enabled
+    arch["history_aggregator"] = history_aggregator
 
     cfg["arch"] = arch
     cfg["load_checkpoint"] = str(

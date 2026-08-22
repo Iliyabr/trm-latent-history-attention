@@ -32,3 +32,6 @@ desktop.ini
 
 # Raw baseline evaluation metrics
 results/baseline/**/metrics_step_*.json
+
+# Raw history-baseline evaluation metrics
+results/history-baselines/**/metrics_step_*.json

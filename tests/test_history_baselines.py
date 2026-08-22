@@ -1,0 +1,117 @@
+﻿from __future__ import annotations
+
+import torch
+
+from pretrain import create_model
+from tests.test_history_interface import first_dev_batch, load_config
+
+
+def test_uniform_history_integration_cpu():
+    device = torch.device("cpu")
+
+    none_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="none",
+    )
+    uniform_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="uniform",
+    )
+
+    metadata, batch = first_dev_batch(none_cfg)
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    none_model, _, _ = create_model(
+        none_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+    uniform_model, _, _ = create_model(
+        uniform_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+
+    none_model.eval()
+    uniform_model.eval()
+
+    # UniformMeanHistory is parameter-free, so both full models must
+    # have exactly the same parameter count.
+    none_params = sum(p.numel() for p in none_model.parameters())
+    uniform_params = sum(p.numel() for p in uniform_model.parameters())
+    assert none_params == uniform_params
+
+    none_carry = none_model.initial_carry(batch)
+    uniform_carry = uniform_model.initial_carry(batch)
+
+    with torch.inference_mode():
+        # Step 1: history is empty, so uniform aggregation must be identity.
+        none_carry, _, _, none_out_1, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        uniform_carry, _, _, uniform_out_1, _ = uniform_model(
+            carry=uniform_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        assert torch.equal(
+            none_out_1["logits"],
+            uniform_out_1["logits"],
+        )
+        assert torch.equal(
+            none_carry.inner_carry.z_H,
+            uniform_carry.inner_carry.z_H,
+        )
+
+        # Save the strictly previous state before step 2.
+        previous_z = uniform_carry.inner_carry.history_z_H[:, 0].clone()
+
+        # Step 2: both models begin from the same recurrent state.
+        # Therefore the no-history model exposes the raw current z_H,
+        # while the uniform model should return mean(current_z, previous_z).
+        none_carry, _, _, _, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        uniform_carry, _, _, uniform_out_2, _ = uniform_model(
+            carry=uniform_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        expected_uniform_z = (
+            none_carry.inner_carry.z_H + previous_z
+        ) / 2
+
+        assert torch.allclose(
+            uniform_carry.inner_carry.z_H,
+            expected_uniform_z,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+        assert torch.isfinite(uniform_out_2["logits"]).all()
+
+        assert torch.equal(
+            uniform_carry.inner_carry.history_lengths,
+            torch.full(
+                (4,),
+                2,
+                dtype=torch.int32,
+                device=device,
+            ),
+        )
+
+    print("UNIFORM HISTORY TRM INTEGRATION PASS")
+
+
+if __name__ == "__main__":
+    test_uniform_history_integration_cpu()

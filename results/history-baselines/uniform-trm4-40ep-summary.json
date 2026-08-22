@@ -1,0 +1,44 @@
+﻿{
+  "experiment": "uniform-trm4-40ep",
+  "status": "completed",
+  "role": "non-attention latent-history baseline",
+  "configuration": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "seed": 0,
+    "global_batch_size": 4,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1,
+    "history_enabled": true,
+    "history_aggregator": "uniform"
+  },
+  "vanilla_reference": {
+    "accuracy": 0.4583950341,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3579128981
+  },
+  "uniform_final": {
+    "step": 10000,
+    "accuracy": 0.4564197659,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3080960512
+  },
+  "final_difference_vs_vanilla": {
+    "accuracy_absolute": -0.0019752682,
+    "accuracy_percentage_points": -0.19752682,
+    "lm_loss_absolute": -0.0498168469
+  },
+  "trajectory": [
+    {"step": 1250, "accuracy": 0.431913, "lm_loss": 1.438495},
+    {"step": 2500, "accuracy": 0.434691, "lm_loss": 1.408414},
+    {"step": 3750, "accuracy": 0.445247, "lm_loss": 1.379765},
+    {"step": 5000, "accuracy": 0.447901, "lm_loss": 1.355098},
+    {"step": 6250, "accuracy": 0.455617, "lm_loss": 1.328449},
+    {"step": 7500, "accuracy": 0.457346, "lm_loss": 1.324441},
+    {"step": 8750, "accuracy": 0.455679, "lm_loss": 1.315116},
+    {"step": 10000, "accuracy": 0.456420, "lm_loss": 1.308096}
+  ],
+  "development_interpretation": "Under the matched seed-0 TRM-4 setting, UniformMeanHistory produced nearly unchanged final development accuracy relative to vanilla TRM while achieving a lower language-model loss. UniformMeanHistory also showed higher intermediate development accuracy at every recorded checkpoint before the final evaluation.",
+  "statistical_caveat": "This is a single-seed development result and does not establish statistical superiority, degradation, or equivalence. Multi-seed paired evaluation is required for final claims."
+}

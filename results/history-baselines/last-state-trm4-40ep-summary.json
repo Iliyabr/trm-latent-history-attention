@@ -1,0 +1,90 @@
+{
+  "experiment": "last-state-trm4-40ep",
+  "status": "completed",
+  "role": "latest-state-only ablation of recency-weighted latent history",
+  "configuration": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "seed": 0,
+    "global_batch_size": 4,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1,
+    "history_enabled": true,
+    "history_aggregator": "last_state",
+    "current_state_weight": 1.0,
+    "latest_history_weight": 0.5,
+    "extra_trainable_parameters": 0
+  },
+  "vanilla_reference": {
+    "accuracy": 0.4583950341,
+    "lm_loss": 1.3579128981
+  },
+  "recency_reference": {
+    "accuracy": 0.4720987976,
+    "lm_loss": 1.274998188
+  },
+  "last_state_final": {
+    "step": 10000,
+    "accuracy": 0.4638888836,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.3001698256
+  },
+  "last_state_best_accuracy_checkpoint": {
+    "step": 7500,
+    "accuracy": 0.466358
+  },
+  "difference_vs_vanilla": {
+    "accuracy_percentage_points": 0.549385,
+    "lm_loss_absolute": -0.057743
+  },
+  "difference_vs_recency": {
+    "accuracy_percentage_points": -0.821991,
+    "lm_loss_absolute": 0.025172
+  },
+  "trajectory": [
+    {
+      "step": 1250,
+      "accuracy": 0.426296,
+      "lm_loss": 1.469845
+    },
+    {
+      "step": 2500,
+      "accuracy": 0.437963,
+      "lm_loss": 1.422596
+    },
+    {
+      "step": 3750,
+      "accuracy": 0.445864,
+      "lm_loss": 1.402864
+    },
+    {
+      "step": 5000,
+      "accuracy": 0.45358,
+      "lm_loss": 1.368632
+    },
+    {
+      "step": 6250,
+      "accuracy": 0.462901,
+      "lm_loss": 1.332337
+    },
+    {
+      "step": 7500,
+      "accuracy": 0.466358,
+      "lm_loss": 1.318192
+    },
+    {
+      "step": 8750,
+      "accuracy": 0.464691,
+      "lm_loss": 1.305542
+    },
+    {
+      "step": 10000,
+      "accuracy": 0.463889,
+      "lm_loss": 1.30017
+    }
+  ],
+  "development_interpretation": "Under the matched seed-0 TRM-4 setting, LastStateHistory improved development accuracy over vanilla TRM but remained below RecencyWeightedHistory. LastStateHistory peaked at step 7500 and slightly declined afterward, whereas RecencyWeightedHistory continued improving through the final checkpoint.",
+  "paper_ready_claim": "The LastState ablation improved over vanilla TRM but remained approximately 0.82 percentage points below RecencyWeightedHistory, suggesting that the Recency gain may not be explained solely by access to the immediately preceding latent state.",
+  "statistical_caveat": "This is a single-seed development result and does not establish statistical superiority or a general causal conclusion."
+}

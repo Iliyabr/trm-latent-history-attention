@@ -331,3 +331,104 @@ def test_gated_history_integration_cpu():
         assert torch.isfinite(gated_out_2["logits"]).all()
 
     print("GATED HISTORY TRM INTEGRATION PASS")
+
+def test_last_state_history_integration_cpu():
+    device = torch.device("cpu")
+
+    none_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="none",
+    )
+    last_cfg = load_config(
+        history_enabled=True,
+        history_aggregator="last_state",
+    )
+
+    metadata, batch = first_dev_batch(none_cfg)
+    batch = {k: v.to(device) for k, v in batch.items()}
+
+    none_model, _, _ = create_model(
+        none_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+    last_model, _, _ = create_model(
+        last_cfg,
+        metadata,
+        rank=0,
+        world_size=1,
+        device=device,
+    )
+
+    none_model.eval()
+    last_model.eval()
+
+    none_params = sum(p.numel() for p in none_model.parameters())
+    last_params = sum(p.numel() for p in last_model.parameters())
+    assert none_params == last_params
+
+    none_carry = none_model.initial_carry(batch)
+    last_carry = last_model.initial_carry(batch)
+
+    with torch.inference_mode():
+        # Step 1: no valid history, so behavior must be identity.
+        none_carry, _, _, none_out_1, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        last_carry, _, _, last_out_1, _ = last_model(
+            carry=last_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        assert torch.equal(
+            none_out_1["logits"],
+            last_out_1["logits"],
+        )
+        assert torch.equal(
+            none_carry.inner_carry.z_H,
+            last_carry.inner_carry.z_H,
+        )
+
+        previous_z = last_carry.inner_carry.history_z_H[:, 0].clone()
+
+        # Step 2: use only the most recent previous state with weight 0.5.
+        none_carry, _, _, _, _ = none_model(
+            carry=none_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+        last_carry, _, _, last_out_2, _ = last_model(
+            carry=last_carry,
+            batch=batch,
+            return_keys=["logits"],
+        )
+
+        expected_last_z = (
+            none_carry.inner_carry.z_H + 0.5 * previous_z
+        ) / 1.5
+
+        assert torch.allclose(
+            last_carry.inner_carry.z_H,
+            expected_last_z,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+        assert torch.isfinite(last_out_2["logits"]).all()
+
+        assert torch.equal(
+            last_carry.inner_carry.history_lengths,
+            torch.full(
+                (4,),
+                2,
+                dtype=torch.int32,
+                device=device,
+            ),
+        )
+
+    print("LAST-STATE HISTORY TRM INTEGRATION PASS")

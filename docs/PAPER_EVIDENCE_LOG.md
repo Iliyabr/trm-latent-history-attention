@@ -475,3 +475,182 @@ Final claims must distinguish:
 - multi-seed evidence
 - statistical confidence
 - exact-solve performance
+
+# 13. HistoryAttention
+
+## Method
+
+HistoryAttention performs token-aligned selective retrieval over strictly
+previous outer-step latent states.
+
+For each sequence position, the current latent vector acts as the query and the
+corresponding vectors from valid previous outer states act directly as keys and
+values.
+
+The first implementation is intentionally projection-free. It therefore tests
+content-dependent history selection without introducing learned query, key, or
+value projections.
+
+Attention is computed across the outer-step history dimension only.
+
+The retrieved context is fused with the current state using one learned scalar
+gate:
+
+z'_t = g * z_t + (1 - g) * c_t
+
+where:
+
+g = sigmoid(gate_logit)
+
+The initial gate is 0.5.
+
+Extra trainable parameters:
+
+1
+
+This matches the trainable parameter overhead of GatedHistory.
+
+## Seed-0 TRM-4 Result
+
+Matched configuration:
+
+- halt_max_steps: 4
+- epochs: 40
+- seed: 0
+- global batch size: 4
+- learning rate: 1e-3
+- hidden size: 64
+- L_cycles: 1
+- evaluation split: dev
+
+Final result:
+
+- Dev accuracy: 0.4768518806
+- LM loss: 1.2298237085
+- Exact accuracy: 0.0
+- gate_logit: -1.0763931274
+- current-state weight: approximately 0.2542
+- history weight: approximately 0.7458
+
+Differences versus important controls:
+
+Versus Vanilla TRM:
+
+- Accuracy: approximately +1.85 percentage points
+- LM loss: approximately -0.12809
+
+Versus GatedHistory:
+
+- Accuracy: approximately +1.13 percentage points
+- LM loss: approximately -0.03149
+
+Versus RecencyWeightedHistory:
+
+- Accuracy: approximately +0.48 percentage points
+- LM loss: approximately -0.04517
+
+Training trajectory:
+
+| Step | Dev Accuracy | LM Loss |
+|---:|---:|---:|
+| 1250 | 0.429136 | 1.444027 |
+| 2500 | 0.441728 | 1.396567 |
+| 3750 | 0.461975 | 1.340990 |
+| 5000 | 0.464012 | 1.289414 |
+| 6250 | 0.472716 | 1.253708 |
+| 7500 | 0.475864 | 1.240461 |
+| 8750 | 0.475432 | 1.233669 |
+| 10000 | 0.476852 | 1.229824 |
+
+Paper-ready development wording:
+
+"Under the matched seed-0 TRM-4 development setting, projection-free
+HistoryAttention achieved the highest final token accuracy and lowest
+language-model loss among the evaluated latent-history mechanisms."
+
+Important controlled-comparison interpretation:
+
+"HistoryAttention and GatedHistory each introduce only one additional trainable
+scalar parameter. The observed seed-0 advantage of HistoryAttention over
+GatedHistory therefore cannot be attributed to a larger trainable parameter
+count."
+
+Scientific interpretation:
+
+"The seed-0 result provides preliminary evidence that content-dependent
+selection over previous latent states may provide value beyond both fixed
+recency weighting and learned but non-selective history mixing."
+
+Statistical caveat:
+
+This is a single-seed development result and does not establish statistical
+superiority over Vanilla TRM, RecencyWeightedHistory, or GatedHistory.
+
+Exact puzzle accuracy remains zero.
+
+---
+
+# 14. Multi-Seed Validation Status
+
+The primary methods selected for multi-seed validation are:
+
+- Vanilla TRM
+- RecencyWeightedHistory
+- GatedHistory
+- HistoryAttention
+
+Planned seeds:
+
+0, 1, 2, 3, 4
+
+Per-puzzle evaluation export was validated without modifying the canonical
+training or evaluation implementation.
+
+The exported tensors are:
+
+- inputs: [200, 81]
+- labels: [200, 81]
+- puzzle_identifiers: [200]
+- logits: [200, 81, 11]
+
+Recomputed token accuracy from the exported logits matches the evaluation
+pipeline metric to floating-point precision.
+
+The current puzzle_identifiers field is not unique across the development set
+and must not be used as the pairing key.
+
+Pairing across runs is instead validated by exact equality of the stored inputs
+and labels. This was verified between independent evaluation runs.
+
+## HistoryAttention Seed 1
+
+Final TRM-4 / 40 epoch / seed-1 result:
+
+- Dev accuracy: 0.4703086913
+- LM loss: 1.2740758657
+- Exact accuracy: 0.0
+- gate_logit: -1.1674356461
+- current-state weight: approximately 0.2373
+- history weight: approximately 0.7627
+
+The per-puzzle exported prediction file contains all 200 development puzzles.
+
+Recomputed accuracy:
+
+0.4703086317
+
+Reported accuracy:
+
+0.4703086913
+
+The approximately 6e-8 difference is consistent with floating-point reduction
+precision.
+
+Preliminary observation:
+
+Both HistoryAttention seed 0 and seed 1 learned substantial reliance on latent
+history, assigning approximately 74.6 percent and 76.3 percent of the scalar
+mixture weight to retrieved historical context, respectively.
+
+This observation is descriptive only and requires completion of the planned
+multi-seed experiment before interpretation.

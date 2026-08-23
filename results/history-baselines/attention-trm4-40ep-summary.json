@@ -1,0 +1,52 @@
+﻿{
+  "experiment": "attention-trm4-40ep",
+  "status": "completed",
+  "role": "projection-free token-aligned selective latent-history retrieval",
+  "configuration": {
+    "halt_max_steps": 4,
+    "epochs": 40,
+    "seed": 0,
+    "global_batch_size": 4,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "L_cycles": 1,
+    "history_enabled": true,
+    "history_aggregator": "attention",
+    "extra_trainable_parameters": 1,
+    "initial_gate": 0.5
+  },
+  "attention_final": {
+    "step": 10000,
+    "accuracy": 0.4768518806,
+    "exact_accuracy": 0.0,
+    "lm_loss": 1.2298237085,
+    "gate_logit": -1.0763931274,
+    "gate_current_state_weight": 0.2541891932,
+    "gate_history_weight": 0.7458108068
+  },
+  "difference_vs_vanilla": {
+    "accuracy_percentage_points": 1.845685,
+    "lm_loss_absolute": -0.128089
+  },
+  "difference_vs_gated": {
+    "accuracy_percentage_points": 1.129630,
+    "lm_loss_absolute": -0.031487
+  },
+  "difference_vs_recency": {
+    "accuracy_percentage_points": 0.475308,
+    "lm_loss_absolute": -0.045174
+  },
+  "trajectory": [
+    {"step": 1250, "accuracy": 0.429136, "lm_loss": 1.444027},
+    {"step": 2500, "accuracy": 0.441728, "lm_loss": 1.396567},
+    {"step": 3750, "accuracy": 0.461975, "lm_loss": 1.340990},
+    {"step": 5000, "accuracy": 0.464012, "lm_loss": 1.289414},
+    {"step": 6250, "accuracy": 0.472716, "lm_loss": 1.253708},
+    {"step": 7500, "accuracy": 0.475864, "lm_loss": 1.240461},
+    {"step": 8750, "accuracy": 0.475432, "lm_loss": 1.233669},
+    {"step": 10000, "accuracy": 0.476852, "lm_loss": 1.229824}
+  ],
+  "development_interpretation": "Under the matched seed-0 TRM-4 setting, HistoryAttention achieved the highest final development accuracy and lowest language-model loss among the evaluated history mechanisms.",
+  "scientific_note": "HistoryAttention and GatedHistory each introduce only one trainable scalar parameter. The seed-0 advantage over GatedHistory therefore cannot be explained by a larger trainable parameter count.",
+  "statistical_caveat": "This is a single-seed development result. It does not establish statistical superiority over RecencyWeightedHistory, GatedHistory, or vanilla TRM. Multi-seed paired evaluation is required."
+}

@@ -6,6 +6,7 @@ from .uniform import UniformMeanHistory
 from .recency import RecencyWeightedHistory
 from .gated import GatedHistory
 from .last_state import LastStateHistory
+from .attention import HistoryAttention
 
 
 def build_history_aggregator(name: str) -> HistoryAggregator:
@@ -28,7 +29,11 @@ def build_history_aggregator(name: str) -> HistoryAggregator:
     if normalized in {"last_state", "latest", "latest_state"}:
         return LastStateHistory()
 
+    if normalized in {"attention", "history_attention", "temporal_attention"}:
+        return HistoryAttention()
+
     raise ValueError(
         f"Unknown history aggregator: {name!r}. "
-        "Available aggregators: none, uniform, recency, gated, last_state"
+        "Available aggregators: none, uniform, recency, gated, "
+        "last_state, attention"
     )

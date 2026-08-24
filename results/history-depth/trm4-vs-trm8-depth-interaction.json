@@ -1,0 +1,108 @@
+{
+  "analysis": "paired TRM-4 vs TRM-8 depth interaction",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "num_puzzles": 200,
+  "bootstrap_replicates": 20000,
+  "bootstrap_seed": 20260823,
+  "cross_depth_pairing_verified": true,
+  "results": {
+    "attention_vs_vanilla_depth4": {
+      "delta": 0.00148148147854954,
+      "delta_percentage_points": 0.148148147854954,
+      "ci95": [
+        -0.010432098084129393,
+        0.013173146545886966
+      ],
+      "ci95_percentage_points": [
+        -1.0432098084129393,
+        1.3173146545886967
+      ],
+      "bootstrap_probability_gt_zero": 0.6028
+    },
+    "attention_vs_vanilla_depth8": {
+      "delta": 0.007296297233551741,
+      "delta_percentage_points": 0.7296297233551741,
+      "ci95": [
+        0.0036666670348495245,
+        0.011098766699433327
+      ],
+      "ci95_percentage_points": [
+        0.36666670348495245,
+        1.1098766699433327
+      ],
+      "bootstrap_probability_gt_zero": 0.99975
+    },
+    "attention_vs_recency_depth4": {
+      "delta": -0.001901234034448862,
+      "delta_percentage_points": -0.1901234034448862,
+      "ci95": [
+        -0.008691356517374516,
+        0.004580557218287113
+      ],
+      "ci95_percentage_points": [
+        -0.8691356517374516,
+        0.4580557218287113
+      ],
+      "bootstrap_probability_gt_zero": 0.2928
+    },
+    "attention_vs_recency_depth8": {
+      "delta": 0.004555555991828442,
+      "delta_percentage_points": 0.45555559918284416,
+      "ci95": [
+        -0.0012225302605656904,
+        0.009975309483706951
+      ],
+      "ci95_percentage_points": [
+        -0.12225302605656904,
+        0.9975309483706951
+      ],
+      "bootstrap_probability_gt_zero": 0.9443
+    },
+    "attention_depth_interaction": {
+      "delta": 0.005814815405756235,
+      "delta_percentage_points": 0.5814815405756235,
+      "ci95": [
+        -0.006283949222415685,
+        0.017555555375292898
+      ],
+      "ci95_percentage_points": [
+        -0.6283949222415686,
+        1.7555555375292897
+      ],
+      "bootstrap_probability_gt_zero": 0.83085
+    },
+    "recency_depth_interaction": {
+      "delta": -0.0006419744458980858,
+      "delta_percentage_points": -0.06419744458980858,
+      "ci95": [
+        -0.010222221724689007,
+        0.01054351995699105
+      ],
+      "ci95_percentage_points": [
+        -1.0222221724689007,
+        1.054351995699105
+      ],
+      "bootstrap_probability_gt_zero": 0.4357
+    },
+    "attention_vs_recency_interaction": {
+      "delta": 0.006456790026277304,
+      "delta_percentage_points": 0.6456790026277304,
+      "ci95": [
+        -0.00045709927726420545,
+        0.0137040097499266
+      ],
+      "ci95_percentage_points": [
+        -0.045709927726420546,
+        1.37040097499266
+      ],
+      "bootstrap_probability_gt_zero": 0.9667
+    }
+  },
+  "note": "Positive depth interaction means the method's paired advantage increases from depth 4 to depth 8. Bootstrap resamples both seeds and puzzles while preserving all method/depth pairing."
+}

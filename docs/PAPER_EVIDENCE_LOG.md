@@ -654,3 +654,202 @@ mixture weight to retrieved historical context, respectively.
 
 This observation is descriptive only and requires completion of the planned
 multi-seed experiment before interpretation.
+## 15. Final CPU Latent-History Study
+
+### Status
+
+CPU latent-history experimentation is CLOSED.
+
+The CPU experiments are treated as controlled mechanism validation, not as
+a reproduction of the full-scale TRM Sudoku result.
+
+### Experimental scope
+
+Confirmatory:
+- TRM-4: 5 matched seeds (0-4)
+- TRM-8: 5 matched seeds (0-4)
+- paired puzzle-level prediction export
+- exact input/label ordering verification
+- paired two-way bootstrap over seeds and puzzles
+
+Exploratory:
+- TRM-2: 3 seeds (0-2)
+- TRM-16: 3 seeds (0-2)
+
+All reduced-compute experiments used the same 200-puzzle development set.
+
+### Reduced CPU architecture
+
+- hidden_size = 64
+- num_heads = 4
+- H_cycles = 1
+- L_cycles = 1
+- H_layers = 0
+- L_layers = 1
+- puzzle embeddings disabled
+- global batch size = 4
+- learning rate = 1e-3
+- training budget = 40 epochs
+- CPU threads = 8
+
+### HistoryAttention mechanism
+
+HistoryAttention performs projection-free, token-aligned attention over
+strictly previous outer-step latent states.
+
+The mechanism:
+- never attends to the current state as history
+- masks unused history slots
+- preserves exact identity when no previous state exists
+- uses detached historical latent states
+- maintains per-sample reset isolation
+- introduces exactly one additional trainable scalar parameter
+
+The scalar gate mixes the current latent state and retrieved historical
+context.
+
+### Final accuracy summary
+
+| Depth | Seeds | Vanilla | Recency | HistoryAttention | Attention - Vanilla |
+|---|---:|---:|---:|---:|---:|
+| 2 | 3 | 48.268 +/- 0.119% | 48.996 +/- 0.586% | 48.311 +/- 0.603% | +0.043 pp |
+| 4 | 5 | 46.757 +/- 1.337% | 47.095 +/- 0.903% | 46.905 +/- 0.574% | +0.148 pp |
+| 8 | 5 | 42.659 +/- 0.203% | 42.933 +/- 0.513% | 43.389 +/- 0.145% | +0.730 pp |
+| 16 | 3 | 42.113 +/- 0.131% | 42.329 +/- 0.566% | 42.171 +/- 0.147% | +0.058 pp |
+
+### Confirmatory paired results
+
+TRM-4:
+
+- Attention vs Vanilla:
+  - mean difference = +0.148 percentage points
+  - 95% paired two-way bootstrap CI = [-1.043, +1.317] pp
+
+- Attention vs Recency:
+  - mean difference = -0.190 percentage points
+  - 95% paired two-way bootstrap CI = [-0.869, +0.458] pp
+
+No statistically resolved HistoryAttention advantage was observed at TRM-4.
+
+TRM-8:
+
+- Attention vs Vanilla:
+  - mean difference = +0.730 percentage points
+  - 95% paired two-way bootstrap CI = [+0.367, +1.110] pp
+  - Attention outperformed Vanilla in 5/5 seeds
+
+- Attention vs Recency:
+  - mean difference = +0.456 percentage points
+  - 95% paired two-way bootstrap CI = [-0.122, +0.998] pp
+
+HistoryAttention therefore shows a reproducible improvement over Vanilla at
+TRM-8 under the reduced-compute regime. Superiority over the Recency baseline
+is not statistically resolved.
+
+### Depth interaction
+
+For the change in the Attention-vs-Vanilla effect from depth 4 to depth 8:
+
+- interaction = +0.581 percentage points
+- 95% CI = [-0.628, +1.756] pp
+
+The interaction interval includes zero.
+
+Therefore the current data do NOT establish a statistically resolved,
+monotonic increase in HistoryAttention benefit with recursive depth.
+
+### Exploratory depth controls
+
+TRM-2:
+- Attention - Vanilla mean = approximately +0.043 pp
+- Recency showed a larger positive descriptive effect
+- selective retrieval has very little history to choose between at this depth
+
+TRM-16:
+- Attention - Vanilla mean = approximately +0.058 pp across three seeds
+- the TRM-8 advantage did not persist
+- learning-curve inspection did not provide strong evidence that simply
+  extending the 40-epoch budget would resolve the result
+
+These depth-2 and depth-16 results are exploratory and should not be presented
+as five-seed confirmatory findings.
+
+### Learning-curve audit
+
+Across TRM-16 runs, best validation checkpoints frequently occurred before
+the final step for Vanilla, Recency, and HistoryAttention.
+
+The observed pattern does not support the simple explanation that the
+TRM-16 result failed solely because training ended too early.
+
+A longer-budget TRM-16 campaign is therefore not currently justified.
+
+### Exact-accuracy limitation
+
+Exact puzzle accuracy remained zero throughout the reduced CPU experiments.
+
+Accordingly, CPU-phase claims are limited to:
+- token-level accuracy
+- language-model loss
+- optimization behavior
+- comparative latent-history mechanism effects
+
+The CPU experiments do NOT establish improved exact Sudoku solving.
+
+### Scale limitation
+
+The official TRM architecture is substantially larger than the CPU
+foundation.
+
+Reduced CPU foundation:
+- hidden_size = 64
+- H_cycles = 1
+- L_cycles = 1
+- L_layers = 1
+- puzzle embeddings disabled
+
+Official TRM configuration:
+- hidden_size = 512
+- H_cycles = 3
+- L_cycles = 6
+- L_layers = 2
+- num_heads = 8
+- puzzle_emb_len = 16
+- puzzle_emb_ndim = hidden_size
+
+A capacity-bridge CPU smoke run using the wider TRM architecture reached
+approximately 46.7 seconds per optimization step (75/250 steps required
+approximately 59 minutes).
+
+Large-model experimentation on the laptop CPU was therefore judged
+computationally impractical and stopped.
+
+### Paper-ready interpretation
+
+In a controlled reduced-compute TRM setting, selective retrieval over
+previous recursive latent states produced a reproducible improvement over
+vanilla recurrence at an intermediate recursion depth. At TRM-8,
+HistoryAttention improved mean token accuracy by +0.730 percentage points
+and the paired bootstrap confidence interval excluded zero. The benefit was
+not observed consistently at shallower or deeper recursion depths, and the
+depth interaction itself was not statistically resolved. We therefore
+interpret the CPU experiments as evidence that latent-history retrieval can
+be useful in a specific recursive regime rather than as evidence of a
+universal or monotonically depth-dependent advantage.
+
+Because these experiments used a deliberately reduced architecture and
+exact puzzle accuracy remained zero, scale transfer is evaluated separately
+under a larger GPU-trained TRM configuration.
+
+### Next phase
+
+The next experimental phase is GPU scale-transfer validation.
+
+Initial GPU comparison:
+1. Vanilla TRM
+2. RecencyWeightedHistory
+3. HistoryAttention
+
+The first GPU runs will use matched conditions and a single screening seed.
+Additional seeds will only be launched after runtime, memory, and initial
+signal are verified.

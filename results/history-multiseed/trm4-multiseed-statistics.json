@@ -1,0 +1,263 @@
+{
+  "analysis": "TRM-4 five-seed paired evaluation",
+  "methods": [
+    "vanilla",
+    "recency",
+    "gated",
+    "attention"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "num_puzzles": 200,
+  "bootstrap_replicates": 20000,
+  "bootstrap_seed": 20260823,
+  "pairing_verified": true,
+  "summary": {
+    "vanilla": {
+      "accuracy_by_seed": [
+        0.4583950340747833,
+        0.4806172847747803,
+        0.4579011797904968,
+        0.48370370268821716,
+        0.45722222328186035
+      ],
+      "accuracy_mean": 0.4675678849220276,
+      "accuracy_sd": 0.01337227118928645,
+      "lm_loss_by_seed": [
+        1.3579128980636597,
+        1.2484701871871948,
+        1.349511981010437,
+        1.2531743049621582,
+        1.3398669958114624
+      ],
+      "lm_loss_mean": 1.3097872734069824,
+      "lm_loss_sd": 0.05423036764886775,
+      "exact_accuracy_all_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "recency": {
+      "accuracy_by_seed": [
+        0.47209879755973816,
+        0.4823456108570099,
+        0.4674074947834015,
+        0.4748765230178833,
+        0.45802462100982666
+      ],
+      "accuracy_mean": 0.4709506094455719,
+      "accuracy_sd": 0.009030670366032521,
+      "lm_loss_by_seed": [
+        1.2749981880187988,
+        1.238782286643982,
+        1.2794647216796875,
+        1.2460694313049316,
+        1.3171436786651611
+      ],
+      "lm_loss_mean": 1.2712916612625123,
+      "lm_loss_sd": 0.031128624604982554,
+      "exact_accuracy_all_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "gated": {
+      "accuracy_by_seed": [
+        0.4655555784702301,
+        0.45308640599250793,
+        0.48395058512687683,
+        0.47685185074806213,
+        0.4673457443714142
+      ],
+      "accuracy_mean": 0.4693580329418182,
+      "accuracy_sd": 0.01175131581423371,
+      "lm_loss_by_seed": [
+        1.2613104581832886,
+        1.290388584136963,
+        1.2234129905700684,
+        1.2441730499267578,
+        1.2709139585494995
+      ],
+      "lm_loss_mean": 1.2580398082733155,
+      "lm_loss_sd": 0.02556456379121111,
+      "exact_accuracy_all_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "attention": {
+      "accuracy_by_seed": [
+        0.4768518805503845,
+        0.47030869126319885,
+        0.46962958574295044,
+        0.46759262681007385,
+        0.46086424589157104
+      ],
+      "accuracy_mean": 0.46904940605163575,
+      "accuracy_sd": 0.005742823099888603,
+      "lm_loss_by_seed": [
+        1.2298237085342407,
+        1.2740758657455444,
+        1.2788455486297607,
+        1.2699393033981323,
+        1.305128812789917
+      ],
+      "lm_loss_mean": 1.271562647819519,
+      "lm_loss_sd": 0.027068517871995147,
+      "exact_accuracy_all_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "paired_bootstrap": {
+    "recency_vs_vanilla": {
+      "method_a": "recency",
+      "method_b": "vanilla",
+      "observed_mean_difference": 0.0033827153965830803,
+      "observed_mean_difference_percentage_points": 0.33827153965830803,
+      "bootstrap_95_ci": [
+        -0.004494134697597473,
+        0.01097530780825764
+      ],
+      "bootstrap_95_ci_percentage_points": [
+        -0.44941346975974733,
+        1.097530780825764
+      ],
+      "bootstrap_probability_difference_gt_zero": 0.80975,
+      "seed_level_differences": [
+        0.013703763484954834,
+        0.0017283260822296143,
+        0.009506314992904663,
+        -0.008827179670333862,
+        0.0008023977279663086
+      ],
+      "seed_level_mean_difference": 0.0033827245235443113,
+      "seed_level_sd_difference": 0.008696250434493034,
+      "positive_seed_count": 4,
+      "negative_seed_count": 1
+    },
+    "gated_vs_vanilla": {
+      "method_a": "gated",
+      "method_b": "vanilla",
+      "observed_mean_difference": 0.0017901230603456497,
+      "observed_mean_difference_percentage_points": 0.17901230603456497,
+      "bootstrap_95_ci": [
+        -0.014753394178114831,
+        0.01697530783712864
+      ],
+      "bootstrap_95_ci_percentage_points": [
+        -1.4753394178114831,
+        1.697530783712864
+      ],
+      "bootstrap_probability_difference_gt_zero": 0.59635,
+      "seed_level_differences": [
+        0.007160544395446777,
+        -0.02753087878227234,
+        0.026049405336380005,
+        -0.006851851940155029,
+        0.010123521089553833
+      ],
+      "seed_level_mean_difference": 0.0017901480197906495,
+      "seed_level_sd_difference": 0.020132092573419972,
+      "positive_seed_count": 3,
+      "negative_seed_count": 2
+    },
+    "attention_vs_vanilla": {
+      "method_a": "attention",
+      "method_b": "vanilla",
+      "observed_mean_difference": 0.00148148147854954,
+      "observed_mean_difference_percentage_points": 0.148148147854954,
+      "bootstrap_95_ci": [
+        -0.010691355937160552,
+        0.013160802773199948
+      ],
+      "bootstrap_95_ci_percentage_points": [
+        -1.0691355937160552,
+        1.3160802773199949
+      ],
+      "bootstrap_probability_difference_gt_zero": 0.59865,
+      "seed_level_differences": [
+        0.018456846475601196,
+        -0.010308593511581421,
+        0.011728405952453613,
+        -0.01611107587814331,
+        0.0036420226097106934
+      ],
+      "seed_level_mean_difference": 0.0014815211296081543,
+      "seed_level_sd_difference": 0.014545913159286685,
+      "positive_seed_count": 3,
+      "negative_seed_count": 2
+    },
+    "attention_vs_recency": {
+      "method_a": "attention",
+      "method_b": "recency",
+      "observed_mean_difference": -0.001901234034448862,
+      "observed_mean_difference_percentage_points": -0.1901234034448862,
+      "bootstrap_95_ci": [
+        -0.008728393353521824,
+        0.004555556480772794
+      ],
+      "bootstrap_95_ci_percentage_points": [
+        -0.8728393353521824,
+        0.4555556480772794
+      ],
+      "bootstrap_probability_difference_gt_zero": 0.2882,
+      "seed_level_differences": [
+        0.004753082990646362,
+        -0.012036919593811035,
+        0.00222209095954895,
+        -0.007283896207809448,
+        0.0028396248817443848
+      ],
+      "seed_level_mean_difference": -0.0019012033939361573,
+      "seed_level_sd_difference": 0.007339323217537565,
+      "positive_seed_count": 3,
+      "negative_seed_count": 2
+    },
+    "attention_vs_gated": {
+      "method_a": "attention",
+      "method_b": "gated",
+      "observed_mean_difference": -0.0003086414362769574,
+      "observed_mean_difference_percentage_points": -0.03086414362769574,
+      "bootstrap_95_ci": [
+        -0.01116080244537443,
+        0.01114845774136481
+      ],
+      "bootstrap_95_ci_percentage_points": [
+        -1.116080244537443,
+        1.114845774136481
+      ],
+      "bootstrap_probability_difference_gt_zero": 0.46315,
+      "seed_level_differences": [
+        0.011296302080154419,
+        0.017222285270690918,
+        -0.014320999383926392,
+        -0.009259223937988281,
+        -0.00648149847984314
+      ],
+      "seed_level_mean_difference": -0.0003086268901824951,
+      "seed_level_sd_difference": 0.013752921250382443,
+      "positive_seed_count": 2,
+      "negative_seed_count": 3
+    }
+  },
+  "statistical_note": "Two-way paired bootstrap resamples both training seeds and development puzzles while preserving method pairing. With only five training seeds, confidence intervals should still be interpreted cautiously."
+}

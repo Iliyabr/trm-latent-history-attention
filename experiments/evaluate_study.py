@@ -7,6 +7,7 @@ import hashlib
 import inspect
 import json
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Sequence
@@ -14,6 +15,12 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 import numpy as np
 import torch
 import yaml
+
+# `python experiments/evaluate_study.py` puts experiments/ on sys.path, not the
+# repo root. Insert the root so `from pretrain import ...` works on Colab.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 VARIANTS = ("B0", "B1", "B2", "B3", "P1")
 CORRUPTION_SIGMAS = (0.05, 0.10, 0.20)
@@ -159,6 +166,7 @@ def load_checkpoint_robust(
                 f"{tuple(best[key].shape)} versus {tuple(target_state[key].shape)}"
             )
     result = model.load_state_dict(best, strict=False)
+    model.to(device)
     matched = len(expected & set(best))
     if not matched:
         raise RuntimeError(f"{checkpoint}: no checkpoint keys match this model")
@@ -385,7 +393,8 @@ def evaluate_model(
     with torch.inference_mode():
         for batch_index, (set_name, batch, effective_size) in enumerate(loader):
             batch = {key: value.to(device) for key, value in batch.items()}
-            carry = model.initial_carry(batch)  # type: ignore[attr-defined]
+            with torch.device(device):
+                carry = model.initial_carry(batch)  # type: ignore[attr-defined]
             trajectory: list[np.ndarray] = []
             q_trajectory: list[np.ndarray] = []
             tick = time.perf_counter()

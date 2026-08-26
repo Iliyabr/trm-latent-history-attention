@@ -11,6 +11,7 @@ from models.losses import ACTLossHead
 from models.recursive_reasoning.trm import (
     TinyRecursiveReasoningModel_ACTV1,
     TinyRecursiveReasoningModel_ACTV1Config,
+    TinyRecursiveReasoningModel_ACTV1InnerCarry,
     TinyRecursiveReasoningModel_ACTV1_Inner,
 )
 
@@ -317,3 +318,58 @@ def test_analysis_request_is_rejected_during_training():
     model.train()
     with pytest.raises(RuntimeError, match="evaluation-only"):
         run_inner(model, {"attention_stats": True})
+
+
+def test_init_buffers_are_registered_and_reset_carry_follows_carry_device():
+    inner = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("none"))
+    buffers = dict(inner.named_buffers())
+    assert "H_init" in buffers
+    assert "L_init" in buffers
+
+    carry = inner.empty_carry(2)
+    reset_flag = torch.ones(2, dtype=torch.bool)
+    reset = inner.reset_carry(reset_flag, carry)
+    assert reset.z_H.device == carry.z_H.device
+    assert torch.equal(reset.z_H[0, 0], inner.H_init)
+
+    model = TinyRecursiveReasoningModel_ACTV1(tiny_config("none").model_dump())
+    batch = {
+        "inputs": torch.randint(0, 11, (2, 5)),
+        "puzzle_identifiers": torch.zeros(2, dtype=torch.long),
+    }
+    wrapped = model.initial_carry(batch)
+    assert wrapped.halted.device == batch["inputs"].device
+    assert wrapped.steps.device == batch["inputs"].device
+    assert wrapped.inner_carry.z_H.device == batch["inputs"].device
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_reset_carry_accepts_cuda_carry_when_init_buffers_are_on_cpu():
+    inner = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("none"))
+    assert inner.H_init.device.type == "cpu"
+    cpu_carry = inner.empty_carry(2)
+    device = torch.device("cuda")
+    carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(
+        z_H=torch.empty_like(cpu_carry.z_H, device=device),
+        z_L=torch.empty_like(cpu_carry.z_L, device=device),
+    )
+    reset_flag = torch.ones(2, dtype=torch.bool, device=device)
+    reset = inner.reset_carry(reset_flag, carry)
+    assert reset.z_H.device.type == "cuda"
+    assert torch.allclose(
+        reset.z_H[0, 0].float().cpu(), inner.H_init.float().cpu()
+    )
+
+    model = TinyRecursiveReasoningModel_ACTV1(
+        tiny_config("none").model_dump()
+    ).to(device)
+    batch = {
+        "inputs": torch.randint(0, 11, (2, 5), device=device),
+        "puzzle_identifiers": torch.zeros(2, dtype=torch.long, device=device),
+    }
+    model.eval()
+    with torch.inference_mode():
+        carry = model.initial_carry(batch)
+        assert carry.halted.device.type == "cuda"
+        assert model.inner.H_init.device.type == "cuda"
+        model(carry, batch)

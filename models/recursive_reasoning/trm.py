@@ -202,9 +202,18 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             gate_init=self.config.history_gate_init,
         )
 
-        # Initial states
-        self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
-        self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
+        # Initial states. register_buffer so model.to(device) moves them with
+        # parameters; nn.Buffer can remain on CPU after create_model/eval load.
+        self.register_buffer(
+            "H_init",
+            trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1),
+            persistent=True,
+        )
+        self.register_buffer(
+            "L_init",
+            trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1),
+            persistent=True,
+        )
 
         # Q head special init
         # Init Q to (almost) zero for faster learning during bootstrapping
@@ -234,9 +243,10 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # Scale
         return self.embed_scale * embedding
 
-    def empty_carry(self, batch_size: int):
+    def empty_carry(self, batch_size: int, device: Optional[torch.device] = None):
         seq_len = self.config.seq_len + self.puzzle_emb_len
-        device = self.H_init.device
+        if device is None:
+            device = self.H_init.device
 
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
             z_H=torch.empty(
@@ -256,9 +266,13 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry):
+        device = carry.z_H.device
+        reset_flag = reset_flag.to(device)
+        h_init = self.H_init.to(device)
+        l_init = self.L_init.to(device)
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
-            z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_H=torch.where(reset_flag.view(-1, 1, 1), h_init, carry.z_H),
+            z_L=torch.where(reset_flag.view(-1, 1, 1), l_init, carry.z_L),
         )
 
     def _run_L_cycle(
@@ -536,12 +550,13 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
     def initial_carry(self, batch: Dict[str, torch.Tensor]):
         batch_size = batch["inputs"].shape[0]
+        device = batch["inputs"].device
 
         return TinyRecursiveReasoningModel_ACTV1Carry(
-            inner_carry=self.inner.empty_carry(batch_size),  # Empty is expected, it will be reseted in first pass as all sequences are halted.
+            inner_carry=self.inner.empty_carry(batch_size, device=device),  # Empty is expected, it will be reseted in first pass as all sequences are halted.
             
-            steps=torch.zeros((batch_size, ), dtype=torch.int32),
-            halted=torch.ones((batch_size, ), dtype=torch.bool),  # Default to halted
+            steps=torch.zeros((batch_size, ), dtype=torch.int32, device=device),
+            halted=torch.ones((batch_size, ), dtype=torch.bool, device=device),  # Default to halted
             
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
         )

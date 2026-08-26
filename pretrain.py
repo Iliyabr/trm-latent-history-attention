@@ -982,7 +982,7 @@ def launch(hydra_config: DictConfig):
             ):
                 runtime_cap_reached = True
 
-        if world_size > 1:
+        if WORLD_SIZE > 1:
             cap_flag = torch.tensor(
                 int(runtime_cap_reached), device=device, dtype=torch.int32
             )

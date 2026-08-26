@@ -149,9 +149,11 @@ class LinearSwish(nn.Module):
 
 
 class SwiGLU(nn.Module):
-    def __init__(self, hidden_size: int, expansion: float):
+    def __init__(self, hidden_size: int, expansion: float, extra_inter: int = 0):
         super().__init__()
-        inter = _find_multiple(round(expansion * hidden_size * 2 / 3), 256)
+        inter = _find_multiple(
+            round(expansion * hidden_size * 2 / 3), 256
+        ) + extra_inter
 
         self.gate_up_proj = CastedLinear(hidden_size, inter * 2, bias=False)
         self.down_proj    = CastedLinear(inter, hidden_size, bias=False)

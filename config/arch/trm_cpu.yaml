@@ -24,3 +24,10 @@ forward_dtype: float32
 mlp_t: false
 no_ACT_continue: true
 
+# Within-H-cycle z_L history experiment: B0/B1/B2/P1/B3.
+history_mode: none
+history_rank: 16
+history_heads: 4
+history_window: 0
+history_gate_init: -2.0
+

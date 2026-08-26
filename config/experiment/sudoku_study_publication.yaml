@@ -1,0 +1,48 @@
+# @package _global_
+defaults:
+  - /arch@arch: trm_history_publication
+  - _self_
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+
+data_paths: [data/sudoku-study-v1]
+data_paths_test: []
+eval_split: dev
+evaluators: []
+global_batch_size: 16
+epochs: 128
+eval_interval: 4
+checkpoint_every_eval: true
+lr: 1e-4
+lr_min_ratio: 0.1
+lr_warmup_steps: 200
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+puzzle_emb_lr: 1e-2
+puzzle_emb_weight_decay: 0.1
+
+seed: 0
+min_eval_interval: 0
+ema: true
+ema_rate: 0.999
+freeze_weights: false
+project_name: trm-latent-history-publication
+run_name: null
+checkpoint_path: null
+metrics_dir: null
+metrics_jsonl: null
+device: auto
+compile_model: true
+dataloader_num_workers: 1
+cpu_threads: null
+optimizer: adam_atan2
+wandb_mode: disabled
+max_runtime_minutes: null
+deterministic: true
+best_dev_metric: exact_accuracy
+best_dev_mode: max
+plateau_patience_evals: 5

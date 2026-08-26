@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import torch
+from models.layers import rms_norm
 
 from .base import HistoryAggregator
 
@@ -22,9 +23,15 @@ class LastStateHistory(HistoryAggregator):
         self,
         current_z: torch.Tensor,
         history_z: torch.Tensor,
-        history_lengths: torch.Tensor,
-    ) -> torch.Tensor:
+        history_lengths: torch.Tensor | None = None,
+        return_diagnostics: bool = False,
+    ):
         batch_size = current_z.shape[0]
+        if history_lengths is None:
+            history_lengths = torch.full(
+                (batch_size,), history_z.shape[1], dtype=torch.long,
+                device=history_z.device
+            )
 
         has_history = history_lengths > 0
 
@@ -42,12 +49,11 @@ class LastStateHistory(HistoryAggregator):
             latest_index.to(dtype=torch.long),
         ]
 
-        mixed = (
-            current_z + 0.5 * latest_z
-        ) / 1.5
+        mixed = rms_norm(current_z + latest_z, variance_epsilon=1e-5)
 
-        return torch.where(
+        output = torch.where(
             has_history[:, None, None],
             mixed,
             current_z,
         )
+        return (output, {}) if return_diagnostics else output

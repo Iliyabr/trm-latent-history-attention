@@ -5,7 +5,8 @@ from .recency import RecencyWeightedHistory
 from .gated import GatedHistory
 from .last_state import LastStateHistory
 from .attention import HistoryAttention
-from .factory import build_history_aggregator
+from .residual import ResidualHistory
+from .factory import build_history_aggregator, normalize_history_mode
 
 __all__ = [
     "HistoryAggregator",
@@ -15,5 +16,7 @@ __all__ = [
     "GatedHistory",
     "LastStateHistory",
     "HistoryAttention",
+    "ResidualHistory",
     "build_history_aggregator",
+    "normalize_history_mode",
 ]

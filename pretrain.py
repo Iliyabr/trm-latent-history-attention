@@ -3,17 +3,25 @@ from dataclasses import dataclass
 import os
 import json
 import math
+import random
+import sys
+import time
+import hashlib
 import yaml
 import shutil
 import copy
 
+import numpy as np
 import torch
 import torch.distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader
 
 import tqdm
-import wandb
+try:
+    import wandb
+except ImportError:  # Local JSONL logging and checkpoints do not require W&B.
+    wandb = None  # type: ignore[assignment]
 import coolname
 import hydra
 import pydantic
@@ -75,8 +83,10 @@ class PretrainConfig(pydantic.BaseModel):
     project_name: Optional[str] = None
     run_name: Optional[str] = None
     load_checkpoint: Optional[str] = None
+    resume_checkpoint: Optional[str] = None
     checkpoint_path: Optional[str] = None
     metrics_dir: Optional[str] = None
+    metrics_jsonl: Optional[str] = None
 
     # Extras
     seed: int = 0
@@ -96,6 +106,11 @@ class PretrainConfig(pydantic.BaseModel):
     cpu_threads: Optional[int] = None
     optimizer: str = "adam_atan2"
     wandb_mode: str = "online"
+    max_runtime_minutes: Optional[float] = None
+    deterministic: bool = True
+    best_dev_metric: str = "exact_accuracy"
+    best_dev_mode: str = "max"
+    plateau_patience_evals: int = 3
 
 @dataclass
 class TrainState:
@@ -270,13 +285,111 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
     )
 
 
-def save_train_state(config: PretrainConfig, train_state: TrainState):
-    # FIXME: Only saved model.
+def _rng_state() -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch": torch.random.get_rng_state(),
+    }
+    if torch.cuda.is_available():
+        state["cuda"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def _restore_rng_state(state: dict[str, Any]) -> None:
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.random.set_rng_state(state["torch"])
+    if "cuda" in state and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(state["cuda"])
+
+
+def save_train_state(
+    config: PretrainConfig,
+    train_state: TrainState,
+    ema_helper: Optional[EMAHelper] = None,
+    model_for_evaluation: Optional[nn.Module] = None,
+    filename: Optional[str] = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Atomically save all state required for an eval-boundary resume.
+
+    Carry is deliberately omitted unless it is ``None``. A live ACT carry is
+    batch-specific and can retain an autograd graph, so replaying it with the
+    next loader batch is unsafe. Study checkpoints are written at evaluation
+    boundaries where training restarts with a fresh carry.
+    """
     if config.checkpoint_path is None:
-        return
+        return None
 
     os.makedirs(config.checkpoint_path, exist_ok=True)
-    torch.save(train_state.model.state_dict(), os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
+    output = os.path.join(
+        config.checkpoint_path, filename or f"step_{train_state.step}.pt"
+    )
+    temporary = output + ".tmp"
+    payload = {
+        "schema_version": 2,
+        # "model" remains compatible with model-only evaluation/loading. When
+        # EMA is used it can hold the exact weights that produced dev metrics.
+        "model": (
+            model_for_evaluation.state_dict()
+            if model_for_evaluation is not None
+            else train_state.model.state_dict()
+        ),
+        # Resume always pairs optimizer moments with the actual training model.
+        "training_model": train_state.model.state_dict(),
+        "optimizers": [optimizer.state_dict() for optimizer in train_state.optimizers],
+        "optimizer_lrs": list(train_state.optimizer_lrs),
+        "step": train_state.step,
+        "total_steps": train_state.total_steps,
+        "scheduler": {
+            "kind": "cosine_with_warmup",
+            "step": train_state.step,
+            "warmup_steps": config.lr_warmup_steps,
+            "min_ratio": config.lr_min_ratio,
+        },
+        "carry": None,
+        "carry_resume_safe": train_state.carry is None,
+        "ema": ema_helper.state_dict() if ema_helper is not None else None,
+        "config": config.model_dump(mode="json"),
+        "rng_state": _rng_state(),
+        "extra": extra or {},
+    }
+    torch.save(payload, temporary)
+    os.replace(temporary, output)
+    return output
+
+
+def restore_train_state(
+    config: PretrainConfig,
+    train_state: TrainState,
+    ema_helper: Optional[EMAHelper],
+    device: torch.device,
+) -> dict[str, Any]:
+    if config.resume_checkpoint is None:
+        return {}
+    print(f"Resuming complete checkpoint {config.resume_checkpoint}")
+    payload = torch.load(config.resume_checkpoint, map_location=device, weights_only=False)
+    if not isinstance(payload, dict) or "optimizers" not in payload:
+        raise ValueError(
+            "resume_checkpoint must be a complete v2 checkpoint; use "
+            "load_checkpoint for model-only weights"
+        )
+    train_state.model.load_state_dict(payload.get("training_model", payload["model"]))
+    if len(payload["optimizers"]) != len(train_state.optimizers):
+        raise ValueError("Checkpoint optimizer count does not match this configuration")
+    for optimizer, state in zip(train_state.optimizers, payload["optimizers"]):
+        optimizer.load_state_dict(state)
+    train_state.step = int(payload["step"])
+    # Preserve the current planned duration while restoring scheduler position.
+    if train_state.step > train_state.total_steps:
+        raise ValueError("Checkpoint step is beyond the configured training duration")
+    train_state.carry = payload.get("carry") if payload.get("carry_resume_safe") else None
+    if ema_helper is not None and payload.get("ema") is not None:
+        ema_helper.load_state_dict(payload["ema"])
+    if payload.get("rng_state"):
+        _restore_rng_state(payload["rng_state"])
+    return dict(payload.get("extra") or {})
 
 
 def load_checkpoint(model: nn.Module, config: PretrainConfig, device: torch.device):
@@ -284,7 +397,8 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig, device: torch.devi
         print(f"Loading checkpoint {config.load_checkpoint}")
 
         # Load state dict
-        state_dict = torch.load(config.load_checkpoint, map_location=device)
+        loaded = torch.load(config.load_checkpoint, map_location=device, weights_only=False)
+        state_dict = loaded.get("model", loaded) if isinstance(loaded, dict) else loaded
 
         # Resize and reset puzzle embedding only when this architecture uses one.
         puzzle_emb_ndim = int(
@@ -307,7 +421,49 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig, device: torch.devi
                         .expand(expected_shape)
                         .contiguous()
                     )
-        model.load_state_dict(state_dict, assign=True)
+        target_state = model.state_dict()
+        exact = (
+            set(state_dict) == set(target_state)
+            and all(
+                state_dict[key].shape == target_state[key].shape
+                for key in state_dict
+            )
+        )
+        if exact:
+            model.load_state_dict(state_dict, assign=True)
+        else:
+            # Model-only checkpoints may warm-start a history ablation. Keep
+            # every shape-compatible backbone tensor while leaving new P1
+            # projections (or widened B3 FFN slices) freshly initialized.
+            compatible = {}
+            resized = 0
+            for key, value in state_dict.items():
+                if key not in target_state:
+                    continue
+                target = target_state[key]
+                if value.shape == target.shape:
+                    compatible[key] = value
+                elif value.ndim == target.ndim:
+                    # B3 widens existing FFN matrices. Preserve the old block
+                    # in the overlapping prefix and initialize only new rows /
+                    # columns from the current model.
+                    merged = target.clone()
+                    overlap = tuple(
+                        slice(0, min(old, new))
+                        for old, new in zip(value.shape, target.shape)
+                    )
+                    merged[overlap] = value[overlap]
+                    compatible[key] = merged
+                    resized += 1
+            incompatible = model.load_state_dict(
+                compatible, strict=False, assign=True
+            )
+            print(
+                "Partially loaded model checkpoint: "
+                f"{len(compatible)}/{len(target_state)} tensors matched; "
+                f"{resized} resized; "
+                f"{len(incompatible.missing_keys)} initialized from config."
+            )
 
 
 def compute_lr(base_lr: float, config: PretrainConfig, train_state: TrainState):
@@ -335,9 +491,9 @@ def create_evaluators(config: PretrainConfig, eval_metadata: PuzzleDatasetMetada
     return evaluators
 
 def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, global_batch_size: int, rank: int, world_size: int, device: torch.device):
-    train_state.step += 1
-    if train_state.step > train_state.total_steps:  # At most train_total_steps
+    if train_state.step >= train_state.total_steps:  # At most total_steps updates.
         return
+    train_state.step += 1
 
     # To device
     batch = {k: v.to(device, non_blocking=device.type == "cuda") for k, v in batch.items()}
@@ -535,7 +691,7 @@ def evaluate(
     return reduced_metrics
 
 def save_code_and_config(config: PretrainConfig):
-    if config.checkpoint_path is None or wandb.run is None:
+    if config.checkpoint_path is None:
         return
 
     os.makedirs(config.checkpoint_path, exist_ok=True)
@@ -556,8 +712,76 @@ def save_code_and_config(config: PretrainConfig):
     with open(config_file, "wt") as f:
         yaml.dump(config.model_dump(), f)
 
-    # Log code
-    wandb.run.log_code(config.checkpoint_path)
+    # Log code when W&B is active; local provenance is always written.
+    if wandb is not None and wandb.run is not None:
+        wandb.run.log_code(config.checkpoint_path)
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+def append_metrics(config: PretrainConfig, record: dict[str, Any]) -> None:
+    path = config.metrics_jsonl
+    if path is None and config.metrics_dir is not None:
+        path = os.path.join(config.metrics_dir, "metrics.jsonl")
+    if path is None:
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_json_value(record), sort_keys=True) + "\n")
+
+
+def metric_by_suffix(metrics: dict[str, Any], suffix: str) -> Optional[float]:
+    matches: list[float] = []
+
+    def visit(value: Any, path: str = "") -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                visit(item, f"{path}/{key}" if path else str(key))
+        elif path == suffix or path.endswith("/" + suffix):
+            try:
+                matches.append(float(value))
+            except (TypeError, ValueError):
+                pass
+
+    visit(metrics)
+    return matches[0] if matches else None
+
+
+def write_run_metadata(
+    config: PretrainConfig, device: torch.device, train_state: TrainState
+) -> None:
+    if config.checkpoint_path is None:
+        return
+    os.makedirs(config.checkpoint_path, exist_ok=True)
+    config_json = json.dumps(
+        config.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+    )
+    metadata = {
+        "schema_version": 1,
+        "config_sha256": hashlib.sha256(config_json.encode()).hexdigest(),
+        "seed": config.seed,
+        "deterministic": config.deterministic,
+        "python": sys.version.split()[0],
+        "numpy": np.__version__,
+        "torch": torch.__version__,
+        "device_type": device.type,
+        "cuda_version": torch.version.cuda,
+        "total_steps": train_state.total_steps,
+    }
+    with open(
+        os.path.join(config.checkpoint_path, "run_metadata.json"),
+        "w",
+        encoding="utf-8",
+    ) as handle:
+        json.dump(metadata, handle, indent=2, sort_keys=True)
 
 
 def load_synced_config(hydra_config: DictConfig, rank: int, world_size: int) -> PretrainConfig:
@@ -615,9 +839,25 @@ def launch(hydra_config: DictConfig):
     # Load sync'ed config
     config = load_synced_config(hydra_config, rank=RANK, world_size=WORLD_SIZE)
     device = resolve_device(config.device)
+    if config.best_dev_mode not in {"min", "max"}:
+        raise ValueError("best_dev_mode must be 'min' or 'max'")
+    if config.max_runtime_minutes is not None and config.max_runtime_minutes <= 0:
+        raise ValueError("max_runtime_minutes must be positive when set")
+    if config.plateau_patience_evals < 1:
+        raise ValueError("plateau_patience_evals must be at least 1")
 
-    # Seed RNGs to ensure consistency
-    torch.random.manual_seed(config.seed + RANK)
+    # Seed all RNGs to ensure consistency.
+    process_seed = config.seed + RANK
+    random.seed(process_seed)
+    np.random.seed(process_seed)
+    torch.random.manual_seed(process_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(process_seed)
+    if config.deterministic:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        if torch.backends.cudnn.is_available():
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
 
     # Dataset
     train_epochs_per_iter = config.eval_interval if config.eval_interval is not None else config.epochs
@@ -641,21 +881,62 @@ def launch(hydra_config: DictConfig):
     # Train state
     train_state = init_train_state(config, train_metadata, rank=RANK, world_size=WORLD_SIZE, device=device)
 
-    # Progress bar and logger
+    # Progress bar, checkpoint state, and logger
     progress_bar = None
     ema_helper = None
-    if RANK == 0:
-        progress_bar = tqdm.tqdm(total=train_state.total_steps)
-        wandb.init(project=config.project_name, name=config.run_name, config=config.model_dump(), mode=config.wandb_mode, settings=wandb.Settings(_disable_stats=True))  # type: ignore
-        wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
-        save_code_and_config(config)
     if config.ema:
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)
         ema_helper.register(train_state.model)
+    resume_extra = restore_train_state(config, train_state, ema_helper, device)
+    best_metric = resume_extra.get("best_metric")
+    no_improvement_evals = int(resume_extra.get("no_improvement_evals", 0))
+    if RANK == 0:
+        progress_bar = tqdm.tqdm(
+            total=train_state.total_steps, initial=train_state.step
+        )
+        if wandb is not None:
+            wandb.init(
+                project=config.project_name,
+                name=config.run_name,
+                config=config.model_dump(),
+                mode=config.wandb_mode,
+                settings=wandb.Settings(_disable_stats=True),
+            )
+            wandb.log(
+                {"num_params": sum(x.numel() for x in train_state.model.parameters())},
+                step=train_state.step,
+            )
+        save_code_and_config(config)
+        write_run_metadata(config, device, train_state)
+        append_metrics(
+            config,
+            {
+                "event": "run_start",
+                "run_name": config.run_name,
+                "seed": config.seed,
+                "step": train_state.step,
+                "total_steps": train_state.total_steps,
+                "resumed_from": config.resume_checkpoint,
+                "num_params": sum(x.numel() for x in train_state.model.parameters()),
+            },
+        )
 
     # Training Loop
-    for _iter_id in range(total_iters):
+    steps_per_iter = max(1, train_state.total_steps // max(1, total_iters))
+    start_iter = min(
+        total_iters,
+        int(resume_extra.get("completed_iters", train_state.step // steps_per_iter)),
+    )
+    # PuzzleDataset seeds each iterator from this counter.
+    if hasattr(train_loader.dataset, "_iters"):
+        train_loader.dataset._iters = start_iter
+    run_started = time.perf_counter()
+    examples_seen = 0
+    runtime_cap_reached = False
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+    for _iter_id in range(start_iter, total_iters):
         print (f"[Rank {RANK}, World Size {WORLD_SIZE}]: Epoch {_iter_id * train_epochs_per_iter}")
 
         ############ Train Iter
@@ -664,12 +945,72 @@ def launch(hydra_config: DictConfig):
         train_state.model.train()
         for set_name, batch, global_batch_size in train_loader:
             metrics = train_batch(config, train_state, batch, global_batch_size, rank=RANK, world_size=WORLD_SIZE, device=device)
+            if metrics is None:
+                break
+            examples_seen += global_batch_size
 
             if RANK == 0 and metrics is not None:
-                wandb.log(metrics, step=train_state.step)
+                elapsed = time.perf_counter() - run_started
+                metrics["runtime/wall_seconds"] = elapsed
+                metrics["runtime/examples_per_second"] = (
+                    examples_seen / elapsed if elapsed else 0.0
+                )
+                metrics["runtime/peak_vram_bytes"] = (
+                    torch.cuda.max_memory_allocated(device)
+                    if device.type == "cuda"
+                    else 0
+                )
+                if wandb is not None and wandb.run is not None:
+                    wandb.log(metrics, step=train_state.step)
+                append_metrics(
+                    config,
+                    {
+                        "event": "train",
+                        "run_name": config.run_name,
+                        "seed": config.seed,
+                        "step": train_state.step,
+                        "metrics": metrics,
+                    },
+                )
                 progress_bar.update(train_state.step - progress_bar.n)  # type: ignore
             if config.ema:
                 ema_helper.update(train_state.model)
+            if (
+                config.max_runtime_minutes is not None
+                and time.perf_counter() - run_started
+                >= config.max_runtime_minutes * 60
+            ):
+                runtime_cap_reached = True
+
+        if world_size > 1:
+            cap_flag = torch.tensor(
+                int(runtime_cap_reached), device=device, dtype=torch.int32
+            )
+            dist.all_reduce(cap_flag, op=dist.ReduceOp.MAX)
+            runtime_cap_reached = bool(cap_flag.item())
+
+        if runtime_cap_reached:
+            if RANK == 0:
+                save_train_state(
+                    config,
+                    train_state,
+                    ema_helper,
+                    filename="runtime_cap.pt",
+                    extra={
+                        "best_metric": best_metric,
+                        "no_improvement_evals": no_improvement_evals,
+                        "completed_iters": _iter_id + 1,
+                    },
+                )
+                append_metrics(
+                    config,
+                    {
+                        "event": "runtime_cap",
+                        "step": train_state.step,
+                        "runtime_seconds": time.perf_counter() - run_started,
+                    },
+                )
+            break
 
         if _iter_id >= config.min_eval_interval:
             ############ Evaluation
@@ -677,8 +1018,9 @@ def launch(hydra_config: DictConfig):
                 print("EVALUATE")
             if config.ema:
                 print("SWITCH TO EMA")
-                train_state_eval = copy.deepcopy(train_state)
-                train_state_eval.model = ema_helper.ema_copy(train_state_eval.model)
+                train_state_eval = copy.copy(train_state)
+                train_state_eval.model = ema_helper.ema_copy(train_state.model)
+                train_state_eval.carry = None
             else:
                 train_state_eval = train_state
             train_state_eval.model.eval()
@@ -693,7 +1035,8 @@ def launch(hydra_config: DictConfig):
                 device=device)
 
             if RANK == 0 and metrics is not None:
-                wandb.log(metrics, step=train_state.step)
+                if wandb is not None and wandb.run is not None:
+                    wandb.log(metrics, step=train_state.step)
 
                 if config.metrics_dir is not None:
                     os.makedirs(config.metrics_dir, exist_ok=True)
@@ -715,12 +1058,67 @@ def launch(hydra_config: DictConfig):
                             default=lambda x: x.item() if hasattr(x, "item") else str(x),
                         )
                     print(f"SAVED METRICS: {metrics_file}")
+
+                candidate = metric_by_suffix(metrics, config.best_dev_metric)
+                improved = False
+                if candidate is not None:
+                    improved = best_metric is None or (
+                        candidate > best_metric
+                        if config.best_dev_mode == "max"
+                        else candidate < best_metric
+                    )
+                    if improved:
+                        best_metric = candidate
+                        no_improvement_evals = 0
+                        save_train_state(
+                            config,
+                            train_state,
+                            ema_helper,
+                            model_for_evaluation=train_state_eval.model,
+                            filename="best_dev.pt",
+                            extra={
+                                "best_metric": best_metric,
+                                "best_metric_name": config.best_dev_metric,
+                                "no_improvement_evals": 0,
+                                "completed_iters": _iter_id + 1,
+                            },
+                        )
+                    else:
+                        no_improvement_evals += 1
+                append_metrics(
+                    config,
+                    {
+                        "event": "eval",
+                        "run_name": config.run_name,
+                        "seed": config.seed,
+                        "step": train_state.step,
+                        "eval_split": config.eval_split,
+                        "metrics": metrics,
+                        "best_metric_name": config.best_dev_metric,
+                        "best_metric": best_metric,
+                        "improved": improved,
+                        "no_improvement_evals": no_improvement_evals,
+                        "plateau": no_improvement_evals
+                        >= config.plateau_patience_evals,
+                        "runtime_seconds": time.perf_counter() - run_started,
+                    },
+                )
                 
             ############ Checkpointing
             if RANK == 0:
                 print("SAVE CHECKPOINT")
             if RANK == 0 and (config.checkpoint_every_eval or (_iter_id == total_iters - 1)):
-                save_train_state(config, train_state_eval)
+                save_train_state(
+                    config,
+                    train_state,
+                    ema_helper,
+                    model_for_evaluation=train_state_eval.model,
+                    extra={
+                        "best_metric": best_metric,
+                        "no_improvement_evals": no_improvement_evals,
+                        "completed_iters": _iter_id + 1,
+                    },
+                )
 
             if config.ema:
                 del train_state_eval
@@ -728,7 +1126,29 @@ def launch(hydra_config: DictConfig):
     # finalize
     if dist.is_initialized():
         dist.destroy_process_group()
-    wandb.finish()
+    if RANK == 0:
+        elapsed = time.perf_counter() - run_started
+        append_metrics(
+            config,
+            {
+                "event": "run_end",
+                "step": train_state.step,
+                "runtime_seconds": elapsed,
+                "examples_seen": examples_seen,
+                "examples_per_second": examples_seen / elapsed if elapsed else 0.0,
+                "peak_vram_bytes": (
+                    torch.cuda.max_memory_allocated(device)
+                    if device.type == "cuda"
+                    else 0
+                ),
+                "runtime_cap_reached": runtime_cap_reached,
+                "best_metric": best_metric,
+                "no_improvement_evals": no_improvement_evals,
+                "plateau": no_improvement_evals >= config.plateau_patience_evals,
+            },
+        )
+    if wandb is not None:
+        wandb.finish()
 
 
 if __name__ == "__main__":

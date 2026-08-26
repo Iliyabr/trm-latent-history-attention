@@ -1,13 +1,9 @@
-﻿"""Build the deterministic Phase-1 Sudoku baseline dataset.
+﻿"""Build the deterministic Sudoku study dataset.
 
-Scientific contract:
-- deterministic source selection
-- disjoint train/dev original puzzles
-- augmentation only after the split
-- official Sudoku-Extreme test set is NOT used for development
-- source and generated-file hashes are recorded
+The split contract is deliberately explicit: select disjoint train/dev bases
+before augmentation, keep the official test source isolated, and fail the
+build if exact or digit-canonical puzzle identities leak across splits.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -15,125 +11,177 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+from typing import Iterable, Sequence
 
 import numpy as np
 from huggingface_hub import hf_hub_download
 
-from build_sudoku_dataset import shuffle_sudoku
-from common import PuzzleDatasetMetadata
+try:
+    from dataset.build_sudoku_dataset import shuffle_sudoku
+    from dataset.common import PuzzleDatasetMetadata
+except ImportError:  # `python dataset/build_sudoku_baseline_v2.py`
+    from build_sudoku_dataset import shuffle_sudoku
+    from common import PuzzleDatasetMetadata
 
 
 SOURCE_REPO = "sapientinc/sudoku-extreme"
+SCHEMA_VERSION = 2
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
 
 
 def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
-def load_csv(path: Path):
-    inputs = []
-    labels = []
-
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
+def load_csv(path: Path) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    inputs: list[np.ndarray] = []
+    labels: list[np.ndarray] = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
         next(reader)
-
-        for _, q, a, _ in reader:
-            assert len(q) == 81
-            assert len(a) == 81
-
+        for row in reader:
+            _, question, answer, _ = row
+            if len(question) != 81 or len(answer) != 81:
+                raise ValueError(f"Malformed Sudoku row in {path}")
             inputs.append(
-                np.frombuffer(
-                    q.replace(".", "0").encode(),
-                    dtype=np.uint8,
-                ).reshape(9, 9) - ord("0")
+                np.frombuffer(question.replace(".", "0").encode(), dtype=np.uint8)
+                .reshape(9, 9) - ord("0")
             )
-
             labels.append(
-                np.frombuffer(
-                    a.encode(),
-                    dtype=np.uint8,
-                ).reshape(9, 9) - ord("0")
+                np.frombuffer(answer.encode(), dtype=np.uint8).reshape(9, 9)
+                - ord("0")
             )
-
     return inputs, labels
+
+
+def input_solution_hash(board: np.ndarray, solution: np.ndarray) -> str:
+    """Hash the exact source pair, independent of numpy dtype/layout."""
+    payload = bytes(board.astype(np.uint8).reshape(-1)) + bytes(
+        solution.astype(np.uint8).reshape(-1)
+    )
+    return sha256_bytes(payload)
+
+
+def canonical_hash(board: np.ndarray, solution: np.ndarray) -> str:
+    """Hash after canonical digit relabeling.
+
+    This catches exact puzzles under global digit permutations. Geometric
+    Sudoku symmetries are intentionally not collapsed: their augmented forms
+    are generated only after leakage checks and never enter dev/test.
+    """
+    flat_solution = solution.astype(np.uint8).reshape(-1)
+    mapping = np.zeros(10, dtype=np.uint8)
+    next_digit = 1
+    for value in flat_solution:
+        value = int(value)
+        if mapping[value] == 0:
+            mapping[value] = next_digit
+            next_digit += 1
+    canonical_board = mapping[board.astype(np.uint8).reshape(-1)]
+    canonical_solution = mapping[flat_solution]
+    return sha256_bytes(bytes(canonical_board) + bytes(canonical_solution))
+
+
+def identity_records(
+    inputs: Sequence[np.ndarray],
+    labels: Sequence[np.ndarray],
+    indices: Iterable[int],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "source_index": int(index),
+            "input_solution_sha256": input_solution_hash(inputs[index], labels[index]),
+            "canonical_sha256": canonical_hash(inputs[index], labels[index]),
+        }
+        for index in indices
+    ]
+
+
+def assert_no_leakage(records: dict[str, list[dict[str, object]]]) -> None:
+    for hash_name in ("input_solution_sha256", "canonical_sha256"):
+        split_hashes = {
+            split: {str(record[hash_name]) for record in values}
+            for split, values in records.items()
+        }
+        for left, right in (("train", "dev"), ("train", "test"), ("dev", "test")):
+            overlap = split_hashes[left] & split_hashes[right]
+            if overlap:
+                raise AssertionError(
+                    f"{hash_name} leakage between {left}/{right}: "
+                    f"{len(overlap)} identities"
+                )
 
 
 def write_split(
     root: Path,
     split: str,
-    source_inputs,
-    source_labels,
-    source_indices: np.ndarray,
+    source_inputs: Sequence[np.ndarray],
+    source_labels: Sequence[np.ndarray],
+    source_indices: Sequence[int],
     num_aug: int,
     augmentation_seed: int,
-):
-    results = {
-        k: []
-        for k in [
+) -> None:
+    results: dict[str, list[object]] = {
+        key: []
+        for key in (
             "inputs",
             "labels",
             "puzzle_identifiers",
             "puzzle_indices",
             "group_indices",
-        ]
+        )
     }
-
     results["puzzle_indices"].append(0)
     results["group_indices"].append(0)
-
     puzzle_id = 0
     example_id = 0
 
-    # The upstream transformation uses np.random directly.
-    # Pin its state explicitly for deterministic augmentation.
+    # shuffle_sudoku uses numpy's legacy global generator.
+    previous_state = np.random.get_state()
     np.random.seed(augmentation_seed)
+    try:
+        for source_index in source_indices:
+            original_input = source_inputs[int(source_index)]
+            original_label = source_labels[int(source_index)]
+            for augmentation_index in range(num_aug + 1):
+                if augmentation_index:
+                    puzzle_input, puzzle_label = shuffle_sudoku(
+                        original_input, original_label
+                    )
+                else:
+                    puzzle_input, puzzle_label = original_input, original_label
+                results["inputs"].append(puzzle_input)
+                results["labels"].append(puzzle_label)
+                example_id += 1
+                puzzle_id += 1
+                results["puzzle_indices"].append(example_id)
+                results["puzzle_identifiers"].append(0)
+            results["group_indices"].append(puzzle_id)
+    finally:
+        np.random.set_state(previous_state)
 
-    for source_idx in source_indices:
-        orig_inp = source_inputs[int(source_idx)]
-        orig_out = source_labels[int(source_idx)]
-
-        for aug_idx in range(1 + num_aug):
-            if aug_idx == 0:
-                inp = orig_inp
-                out = orig_out
-            else:
-                inp, out = shuffle_sudoku(orig_inp, orig_out)
-
-            results["inputs"].append(inp)
-            results["labels"].append(out)
-
-            example_id += 1
-            puzzle_id += 1
-
-            results["puzzle_indices"].append(example_id)
-            results["puzzle_identifiers"].append(0)
-
-        results["group_indices"].append(puzzle_id)
-
-    def seq_to_numpy(seq):
-        arr = np.concatenate(seq).reshape(len(seq), -1)
-        assert np.all((arr >= 0) & (arr <= 9))
-        return arr + 1
+    def sequences(values: list[object]) -> np.ndarray:
+        array = np.concatenate(values).reshape(len(values), -1)
+        if not np.all((array >= 0) & (array <= 9)):
+            raise AssertionError(f"Out-of-range value in {split}")
+        return array.astype(np.uint8) + 1
 
     arrays = {
-        "inputs": seq_to_numpy(results["inputs"]),
-        "labels": seq_to_numpy(results["labels"]),
-        "group_indices": np.asarray(
-            results["group_indices"], dtype=np.int32
-        ),
-        "puzzle_indices": np.asarray(
-            results["puzzle_indices"], dtype=np.int32
-        ),
+        "inputs": sequences(results["inputs"]),
+        "labels": sequences(results["labels"]),
+        "group_indices": np.asarray(results["group_indices"], dtype=np.int32),
+        "puzzle_indices": np.asarray(results["puzzle_indices"], dtype=np.int32),
         "puzzle_identifiers": np.asarray(
             results["puzzle_identifiers"], dtype=np.int32
         ),
     }
-
     metadata = PuzzleDatasetMetadata(
         seq_len=81,
         vocab_size=11,
@@ -143,153 +191,153 @@ def write_split(
         num_puzzle_identifiers=1,
         total_groups=len(source_indices),
         mean_puzzle_examples=1,
-        total_puzzles=len(source_indices),
+        total_puzzles=len(source_indices) * (num_aug + 1),
         sets=["all"],
     )
-
     split_dir = root / split
     split_dir.mkdir(parents=True, exist_ok=True)
-
     (split_dir / "dataset.json").write_text(
-        json.dumps(metadata.model_dump(), indent=2),
-        encoding="utf-8",
+        json.dumps(metadata.model_dump(), indent=2) + "\n", encoding="utf-8"
     )
-
     for name, values in arrays.items():
         np.save(split_dir / f"all__{name}.npy", values)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("data/sudoku-baseline-v2"),
+        "--output-dir", type=Path, default=Path("data/sudoku-study-v1")
     )
-
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path(
-            "artifacts/data/sudoku_baseline_v2_manifest.json"
-        ),
+        default=Path("artifacts/data/sudoku_study_v1_manifest.json"),
     )
-
-    parser.add_argument("--train-size", type=int, default=1000)
-    parser.add_argument("--dev-size", type=int, default=200)
-    parser.add_argument("--num-aug", type=int, default=10)
+    parser.add_argument("--train-size", type=int, default=900)
+    parser.add_argument("--dev-size", type=int, default=100)
+    parser.add_argument("--test-size", type=int, default=1000)
+    parser.add_argument("--num-aug", type=int, default=64)
     parser.add_argument("--seed", type=int, default=0)
+    return parser.parse_args(argv)
 
-    args = parser.parse_args()
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if min(args.train_size, args.dev_size, args.test_size) <= 0:
+        raise ValueError("All split sizes must be positive")
+    if args.num_aug < 0:
+        raise ValueError("--num-aug must be non-negative")
 
     train_csv = Path(
-        hf_hub_download(
-            SOURCE_REPO,
-            "train.csv",
-            repo_type="dataset",
-        )
+        hf_hub_download(SOURCE_REPO, "train.csv", repo_type="dataset")
     )
-
-    # Download only to freeze the identity of the official test source.
-    # It is NOT used for model development.
     test_csv = Path(
-        hf_hub_download(
-            SOURCE_REPO,
-            "test.csv",
-            repo_type="dataset",
-        )
+        hf_hub_download(SOURCE_REPO, "test.csv", repo_type="dataset")
     )
-
-    source_inputs, source_labels = load_csv(train_csv)
-
-    requested = args.train_size + args.dev_size
-    assert requested <= len(source_inputs)
+    train_inputs, train_labels = load_csv(train_csv)
+    test_inputs, test_labels = load_csv(test_csv)
+    if args.train_size + args.dev_size > len(train_inputs):
+        raise ValueError("Requested train/dev bases exceed the source training set")
+    if args.test_size > len(test_inputs):
+        raise ValueError("Requested test size exceeds the official test set")
 
     rng = np.random.default_rng(args.seed)
     selected = rng.choice(
-        len(source_inputs),
-        size=requested,
-        replace=False,
+        len(train_inputs), args.train_size + args.dev_size, replace=False
     )
-
-    # Split BEFORE augmentation.
     train_indices = np.sort(selected[: args.train_size])
     dev_indices = np.sort(selected[args.train_size :])
-
-    assert len(np.intersect1d(train_indices, dev_indices)) == 0
-
-    root = args.output_dir
-    root.mkdir(parents=True, exist_ok=True)
-
-    write_split(
-        root=root,
-        split="train",
-        source_inputs=source_inputs,
-        source_labels=source_labels,
-        source_indices=train_indices,
-        num_aug=args.num_aug,
-        augmentation_seed=args.seed + 1000,
+    # Bounded official test selection is deterministic and independent.
+    test_indices = np.sort(
+        np.random.default_rng(args.seed + 1).choice(
+            len(test_inputs), args.test_size, replace=False
+        )
     )
+    if np.intersect1d(train_indices, dev_indices).size:
+        raise AssertionError("Source-index leakage between train and dev")
 
-    # Development data is never augmented.
-    write_split(
-        root=root,
-        split="dev",
-        source_inputs=source_inputs,
-        source_labels=source_labels,
-        source_indices=dev_indices,
-        num_aug=0,
-        augmentation_seed=args.seed + 2000,
-    )
-
-    (root / "identifiers.json").write_text(
-        '["<blank>"]\n',
-        encoding="utf-8",
-    )
-
-    generated_hashes = {}
-
-    for path in sorted(root.rglob("*")):
-        if path.is_file():
-            generated_hashes[
-                str(path.relative_to(root)).replace("\\", "/")
-            ] = sha256_file(path)
-
-    manifest = {
-        "schema_version": 1,
-        "dataset_name": "sudoku-baseline-v2",
-        "source_repo": SOURCE_REPO,
-        "source_train_sha256": sha256_file(train_csv),
-        "source_official_test_sha256": sha256_file(test_csv),
-        "official_test_used_for_development": False,
-        "numpy_version": np.__version__,
-        "seed": args.seed,
-        "augmentation_seed": args.seed + 1000,
-        "train_original_count": args.train_size,
-        "dev_original_count": args.dev_size,
-        "train_augmentations_per_original": args.num_aug,
-        "train_source_indices": train_indices.tolist(),
-        "dev_source_indices": dev_indices.tolist(),
-        "train_dev_overlap": 0,
-        "generated_files_sha256": generated_hashes,
+    identities = {
+        "train": identity_records(train_inputs, train_labels, train_indices),
+        "dev": identity_records(train_inputs, train_labels, dev_indices),
+        "test": identity_records(test_inputs, test_labels, test_indices),
     }
+    assert_no_leakage(identities)
 
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-
-    args.manifest.write_text(
-        json.dumps(manifest, indent=2),
-        encoding="utf-8",
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_split(
+        args.output_dir,
+        "train",
+        train_inputs,
+        train_labels,
+        train_indices,
+        args.num_aug,
+        args.seed + 1000,
+    )
+    write_split(
+        args.output_dir,
+        "dev",
+        train_inputs,
+        train_labels,
+        dev_indices,
+        0,
+        args.seed + 2000,
+    )
+    write_split(
+        args.output_dir,
+        "test",
+        test_inputs,
+        test_labels,
+        test_indices,
+        0,
+        args.seed + 3000,
+    )
+    (args.output_dir / "identifiers.json").write_text(
+        '["<blank>"]\n', encoding="utf-8"
     )
 
-    print("BASELINE DATASET V2 BUILD PASS")
-    print(f"output = {root}")
-    print(f"manifest = {args.manifest}")
-    print(f"train originals = {len(train_indices)}")
-    print(f"dev originals = {len(dev_indices)}")
-    print("train/dev overlap = 0")
-    print("official test used for development = False")
+    generated_hashes = {
+        str(path.relative_to(args.output_dir)).replace("\\", "/"): sha256_file(path)
+        for path in sorted(args.output_dir.rglob("*"))
+        if path.is_file()
+    }
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "dataset_name": "sudoku-study-v1",
+        "source": {
+            "repo": SOURCE_REPO,
+            "train_sha256": sha256_file(train_csv),
+            "official_test_sha256": sha256_file(test_csv),
+        },
+        "seed": args.seed,
+        "split_before_augmentation": True,
+        "official_test_used_for_development": False,
+        "counts": {
+            "train_bases": args.train_size,
+            "dev": args.dev_size,
+            "test": args.test_size,
+            "train_augmentations_per_base": args.num_aug,
+            "train_examples_on_disk": args.train_size * (args.num_aug + 1),
+        },
+        "augmentation_seed": args.seed + 1000,
+        "identities": identities,
+        "leakage_assertions": {
+            "source_train_dev_overlap": 0,
+            "input_solution_hash_overlap": 0,
+            "canonical_hash_overlap": 0,
+        },
+        "generated_files_sha256": generated_hashes,
+        "numpy_version": np.__version__,
+    }
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print(
+        "SUDOKU STUDY BUILD PASS "
+        f"(train={args.train_size}x{args.num_aug + 1}, "
+        f"dev={args.dev_size}, test={args.test_size})"
+    )
+    print(f"output={args.output_dir}\nmanifest={args.manifest}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

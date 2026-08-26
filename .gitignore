@@ -25,6 +25,12 @@ results/raw/
 *.pth
 *.ckpt
 
+# Accidental nested clone of this repository
+/trm-latent-history-attention/
+
+# Accidental nested clone of this repository
+/trm-latent-history-attention/
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -9,7 +9,10 @@ from pydantic import BaseModel
 from tqdm import tqdm
 from huggingface_hub import hf_hub_download
 
-from common import PuzzleDatasetMetadata
+try:
+    from dataset.common import PuzzleDatasetMetadata
+except ImportError:  # `python dataset/build_sudoku_dataset.py`
+    from common import PuzzleDatasetMetadata
 
 
 cli = ArgParser()

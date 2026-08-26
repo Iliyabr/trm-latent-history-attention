@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict, Optional
+from typing import Any, Tuple, List, Dict, Optional
 from dataclasses import dataclass
 import math
 import torch
@@ -10,7 +10,7 @@ import random
 from models.common import trunc_normal_init_
 from models.layers import rms_norm, LinearSwish, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
 from models.sparse_embedding import CastedSparseEmbedding
-from models.history import build_history_aggregator
+from models.history import build_history_aggregator, normalize_history_mode
 
 IGNORE_LABEL_ID = -100
 
@@ -18,11 +18,6 @@ IGNORE_LABEL_ID = -100
 class TinyRecursiveReasoningModel_ACTV1InnerCarry:
     z_H: torch.Tensor
     z_L: torch.Tensor
-
-    # Phase 2: optional detached outer-step latent history.
-    # This is recording-only for now; it must not affect vanilla computation.
-    history_z_H: Optional[torch.Tensor] = None
-    history_lengths: Optional[torch.Tensor] = None
 
 
 @dataclass
@@ -68,13 +63,22 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
 
-    # Phase 2: record detached z_H states across outer reasoning steps.
-    # Recording is inert: no history state is consumed by the model yet.
+    # Within-H-cycle z_L history. The legacy fields remain accepted so old
+    # experiment configs continue to parse.
     history_enabled: bool = False
     history_aggregator: str = "none"
+    history_mode: Optional[str] = None
+    history_rank: int = 16
+    history_heads: int = 4
+    history_window: int = 0
+    history_gate_init: float = -2.0
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
-    def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
+    def __init__(
+        self,
+        config: TinyRecursiveReasoningModel_ACTV1Config,
+        extra_ffn_inter: int = 0,
+    ) -> None:
         super().__init__()
 
         self.config = config
@@ -95,6 +99,7 @@ class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
         self.mlp = SwiGLU(
             hidden_size=config.hidden_size,
             expansion=config.expansion,
+            extra_inter=extra_ffn_inter,
         )
         self.norm_eps = config.rms_norm_eps
 
@@ -157,13 +162,44 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         else:
             pass
 
-        # Reasoning Layers
-        self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
+        configured_mode = (
+            self.config.history_mode
+            if self.config.history_mode is not None
+            else self.config.history_aggregator
+        )
+        if self.config.history_mode is None and not self.config.history_enabled:
+            configured_mode = "none"
+        self.history_mode = normalize_history_mode(configured_mode)
 
-        # Pluggable latent-history aggregation.
-        # The default "none" implementation is parameter-free and identity.
+        # B3 spends approximately P1's 4*D*rank+1 parameters on widening every
+        # shared backbone FFN. SwiGLU adds 3*D parameters per intermediate unit.
+        extra_ffn_inter = 0
+        if self.history_mode == "parameter_matched":
+            target = 4 * self.config.hidden_size * self.config.history_rank + 1
+            per_unit = (
+                3 * self.config.hidden_size * max(self.config.L_layers, 1)
+            )
+            extra_ffn_inter = max(1, round(target / per_unit))
+
+        # Reasoning Layers
+        self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(
+            layers=[
+                TinyRecursiveReasoningModel_ACTV1Block(
+                    self.config, extra_ffn_inter=extra_ffn_inter
+                )
+                for _i in range(self.config.L_layers)
+            ]
+        )
+
+        # The module is called inside every z_L recursion. It owns no carry.
         self.history_aggregator = build_history_aggregator(
-            self.config.history_aggregator
+            self.history_mode,
+            hidden_size=self.config.hidden_size,
+            rank=self.config.history_rank,
+            num_heads=self.config.history_heads,
+            window=self.config.history_window,
+            norm_eps=self.config.rms_norm_eps,
+            gate_init=self.config.history_gate_init,
         )
 
         # Initial states
@@ -202,24 +238,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         seq_len = self.config.seq_len + self.puzzle_emb_len
         device = self.H_init.device
 
-        history_z_H = None
-        history_lengths = None
-
-        if self.config.history_enabled:
-            history_z_H = torch.zeros(
-                batch_size,
-                self.config.halt_max_steps,
-                seq_len,
-                self.config.hidden_size,
-                dtype=self.forward_dtype,
-                device=device,
-            )
-            history_lengths = torch.zeros(
-                batch_size,
-                dtype=torch.int32,
-                device=device,
-            )
-
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
             z_H=torch.empty(
                 batch_size,
@@ -235,38 +253,155 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 dtype=self.forward_dtype,
                 device=device,
             ),
-            history_z_H=history_z_H,
-            history_lengths=history_lengths,
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry):
-        history_z_H = carry.history_z_H
-        history_lengths = carry.history_lengths
-
-        if self.config.history_enabled:
-            assert history_z_H is not None
-            assert history_lengths is not None
-
-            # A reused batch slot must never inherit history from a previous puzzle.
-            history_z_H = torch.where(
-                reset_flag.view(-1, 1, 1, 1),
-                torch.zeros_like(history_z_H),
-                history_z_H,
-            )
-            history_lengths = torch.where(
-                reset_flag,
-                torch.zeros_like(history_lengths),
-                history_lengths,
-            )
-
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
             z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
             z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
-            history_z_H=history_z_H,
-            history_lengths=history_lengths,
         )
 
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def _run_L_cycle(
+        self,
+        z_L: torch.Tensor,
+        input_injection: torch.Tensor,
+        seq_info: Dict[str, Optional[torch.Tensor]],
+        h_step: int,
+        analysis: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        # Local Python references retain autograd only for this H cycle and are
+        # discarded on return. No diagnostics or history enters ACT carry.
+        history = [z_L]
+        records: Dict[str, List[torch.Tensor]] = {}
+        kv_cache = None
+        if self.history_mode == "attention":
+            kv_cache = self.history_aggregator.append_kv(None, z_L)
+        for _L_step in range(self.config.L_cycles):
+            # P1 reads projected cache directly; other ablations consume raw
+            # states and therefore materialize the short temporal stack.
+            stacked = (
+                z_L.unsqueeze(1)
+                if self.history_mode == "attention"
+                else torch.stack(history, dim=1)
+            )
+            if self.history_mode == "residual":
+                update = self.L_level(
+                    z_L, input_injection, **seq_info
+                )
+                z_L = self.history_aggregator(update, stacked)
+            else:
+                diagnostics_requested = (
+                    self.history_mode == "attention"
+                    and analysis is not None and (
+                    analysis.get("attention_weights", False)
+                    or analysis.get("attention_stats", False)
+                    or analysis.get("delete_state") is not None
+                    )
+                )
+                delete_state = None
+                deletion = analysis.get("delete_state") if analysis else None
+                if deletion is not None:
+                    if isinstance(deletion, str):
+                        delete_state = deletion
+                    elif (
+                        deletion.get("h_step", h_step) == h_step
+                        and deletion.get("l_step", _L_step) == _L_step
+                    ):
+                        delete_state = deletion["kind"]
+                if self.history_mode == "attention":
+                    lengths = torch.full(
+                        (z_L.shape[0],), kv_cache[0].shape[1],
+                        dtype=torch.long, device=z_L.device
+                    )
+                    read_result = self.history_aggregator(
+                        z_L, stacked, history_lengths=lengths,
+                        return_diagnostics=diagnostics_requested,
+                        kv_cache=kv_cache, delete_state=delete_state,
+                    )
+                else:
+                    read_result = self.history_aggregator(z_L, stacked)
+                if diagnostics_requested:
+                    read_z, step_diagnostics = read_result
+                    for key, value in step_diagnostics.items():
+                        if (
+                            key == "attention_weights"
+                            and not analysis.get("attention_weights", False)
+                        ):
+                            continue
+                        records.setdefault(key, []).append(value.detach())
+                else:
+                    read_z = read_result
+                z_L = self.L_level(
+                    read_z, input_injection, **seq_info
+                )
+
+            corruption = analysis.get("corruption") if analysis else None
+            if (
+                corruption is not None
+                and corruption.get("h_step", 0) == h_step
+                and corruption.get("l_step", 0) == _L_step
+            ):
+                supplied_noise = corruption.get("noise")
+                if supplied_noise is None:
+                    generator = torch.Generator(device=z_L.device)
+                    generator.manual_seed(int(corruption.get("seed", 0)))
+                    noise = torch.randn(
+                        z_L.shape, generator=generator,
+                        device=z_L.device, dtype=z_L.dtype
+                    )
+                else:
+                    noise = supplied_noise.to(
+                        device=z_L.device, dtype=z_L.dtype
+                    )
+                    if noise.shape != z_L.shape:
+                        raise ValueError(
+                            "analysis corruption noise must match z_L shape"
+                        )
+                sample_rms = z_L.float().square().mean(
+                    dim=(1, 2), keepdim=True
+                ).sqrt().to(z_L.dtype)
+                perturbation = (
+                    float(corruption["sigma"]) * sample_rms * noise
+                )
+                z_L = z_L + perturbation
+                records.setdefault("corruption_noise", []).append(
+                    perturbation.detach()
+                )
+
+            if analysis is not None and analysis.get(
+                "intermediate_logits", False
+            ):
+                with torch.no_grad():
+                    intermediate = self.lm_head(
+                        z_L
+                    )[:, self.puzzle_emb_len:].detach()
+                records.setdefault("intermediate_logits", []).append(
+                    intermediate
+                )
+            if self.history_mode == "attention":
+                kv_cache = self.history_aggregator.append_kv(kv_cache, z_L)
+            else:
+                history.append(z_L)
+        return (z_L, records) if analysis is not None else z_L
+
+    def forward(
+        self,
+        carry: TinyRecursiveReasoningModel_ACTV1InnerCarry,
+        batch: Dict[str, torch.Tensor],
+        analysis_request: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Run one ACT step.
+
+        ``analysis_request`` is an evaluation-only, one-call API. Supported
+        flags are ``attention_weights``, ``attention_stats``,
+        ``intermediate_logits``, and ``cycle_logits``. ``delete_state`` accepts
+        ``{"kind": "most"|"least", "h_step": int, "l_step": int}``;
+        ``corruption`` accepts selected H/L indices, ``sigma``, and either
+        ``seed`` or a full-sized ``noise`` tensor. Returned analysis tensors are
+        detached and never stored on the module or carry.
+        """
+        if analysis_request is not None and self.training:
+            raise RuntimeError("analysis_request is evaluation-only")
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
@@ -277,73 +412,114 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # Forward iterations
         it = 0
         z_H, z_L = carry.z_H, carry.z_L
+        analysis_cycles: List[Dict[str, List[torch.Tensor]]] = []
+        cycle_logits: List[torch.Tensor] = []
         # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
-                for _L_step in range(self.config.L_cycles):
-                    z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                cycle_result = self._run_L_cycle(
+                    z_L, z_H + input_embeddings, seq_info,
+                    h_step=_H_step, analysis=analysis_request,
+                )
+                if analysis_request is None:
+                    z_L = cycle_result
+                else:
+                    z_L, cycle_records = cycle_result
+                    analysis_cycles.append(cycle_records)
                 z_H = self.L_level(z_H, z_L, **seq_info)
+                if analysis_request is not None and analysis_request.get(
+                    "cycle_logits", False
+                ):
+                    with torch.no_grad():
+                        cycle_logits.append(
+                            self.lm_head(
+                                z_H
+                            )[:, self.puzzle_emb_len:].detach()
+                        )
         # 1 with grad
-        for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+        final_h_step = self.config.H_cycles - 1
+        cycle_result = self._run_L_cycle(
+            z_L, z_H + input_embeddings, seq_info,
+            h_step=final_h_step, analysis=analysis_request,
+        )
+        if analysis_request is None:
+            z_L = cycle_result
+        else:
+            z_L, cycle_records = cycle_result
+            analysis_cycles.append(cycle_records)
         z_H = self.L_level(z_H, z_L, **seq_info)
-
-        # Optional history aggregation.
-        #
-        # IMPORTANT: carry.history_z_H contains only states from STRICTLY
-        # PREVIOUS outer reasoning steps. The current state is appended only
-        # after aggregation below, preserving causal history semantics.
-        if self.config.history_enabled:
-            assert carry.history_z_H is not None
-            assert carry.history_lengths is not None
-
-            z_H = self.history_aggregator(
-                current_z=z_H,
-                history_z=carry.history_z_H,
-                history_lengths=carry.history_lengths,
-            )
+        if analysis_request is not None and analysis_request.get(
+            "cycle_logits", False
+        ):
+            with torch.no_grad():
+                cycle_logits.append(
+                    self.lm_head(z_H)[:, self.puzzle_emb_len:].detach()
+                )
 
         # LM Outputs
         z_H_detached = z_H.detach()
         z_L_detached = z_L.detach()
 
-        history_z_H = carry.history_z_H
-        history_lengths = carry.history_lengths
-
-        if self.config.history_enabled:
-            assert history_z_H is not None
-            assert history_lengths is not None
-
-            # Record only AFTER the current state has been computed.
-            # A future HistoryAttention module can therefore consume only
-            # states from strictly earlier outer reasoning steps.
-            history_z_H = history_z_H.clone()
-            history_lengths = history_lengths.clone()
-
-            batch_indices = torch.arange(
-                z_H.shape[0],
-                device=z_H.device,
-            )
-            history_slots = history_lengths.clamp(
-                max=self.config.halt_max_steps - 1
-            ).to(torch.long)
-
-            history_z_H[batch_indices, history_slots] = z_H_detached
-
-            history_lengths = torch.clamp(
-                history_lengths + 1,
-                max=self.config.halt_max_steps,
-            )
-
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(
             z_H=z_H_detached,
             z_L=z_L_detached,
-            history_z_H=history_z_H,
-            history_lengths=history_lengths,
         )
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
         q_logits = self.q_head(z_H[:, 0]).to(torch.float32) # Q-head; uses the first puzzle_emb position
-        return new_carry, output, (q_logits[..., 0], q_logits[..., 1])
+        standard = (
+            new_carry, output, (q_logits[..., 0], q_logits[..., 1])
+        )
+        if analysis_request is None:
+            return standard
+
+        analysis_outputs: Dict[str, torch.Tensor] = {}
+        if cycle_logits:
+            analysis_outputs["history_cycle_logits"] = torch.stack(
+                cycle_logits, dim=0
+            )
+        intermediate = [
+            torch.stack(cycle["intermediate_logits"], dim=0)
+            for cycle in analysis_cycles
+            if cycle.get("intermediate_logits")
+        ]
+        if intermediate:
+            analysis_outputs["history_intermediate_logits"] = torch.stack(
+                intermediate, dim=0
+            )
+        weights_by_cycle = [
+            cycle.get("attention_weights", []) for cycle in analysis_cycles
+        ]
+        if any(weights_by_cycle):
+            padded_cycles = []
+            for cycle_weights in weights_by_cycle:
+                padded_steps = []
+                for weights in cycle_weights:
+                    padding = self.config.L_cycles - weights.shape[-1]
+                    padded_steps.append(F.pad(weights, (0, padding)))
+                padded_cycles.append(torch.stack(padded_steps, dim=0))
+            analysis_outputs["history_attention_weights"] = torch.stack(
+                padded_cycles, dim=0
+            )
+        for source, output_key in (
+            ("attention_entropy", "history_attention_entropy"),
+            ("gate", "history_attention_gate"),
+            ("deleted_state_index", "history_deleted_state_index"),
+        ):
+            values = [
+                torch.stack(cycle[source], dim=0)
+                for cycle in analysis_cycles if cycle.get(source)
+            ]
+            if values:
+                analysis_outputs[output_key] = torch.stack(values, dim=0)
+        corruption_noise = [
+            value for cycle in analysis_cycles
+            for value in cycle.get("corruption_noise", [])
+        ]
+        if corruption_noise:
+            analysis_outputs["history_corruption_noise"] = torch.stack(
+                corruption_noise, dim=0
+            )
+        return (*standard, analysis_outputs)
 
 
 class TinyRecursiveReasoningModel_ACTV1(nn.Module):
@@ -370,7 +546,14 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
         )
         
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
+    def forward(
+        self,
+        carry: TinyRecursiveReasoningModel_ACTV1Carry,
+        batch: Dict[str, torch.Tensor],
+        analysis_request: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
+        if analysis_request is not None and self.training:
+            raise RuntimeError("analysis_request is evaluation-only")
 
         # Update data, carry (removing halted sequences)
         new_inner_carry = self.inner.reset_carry(carry.halted, carry.inner_carry)
@@ -380,13 +563,21 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
         # Forward inner model
-        new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
+        inner_result = self.inner(
+            new_inner_carry, new_current_data,
+            analysis_request=analysis_request,
+        )
+        new_inner_carry, logits, (
+            q_halt_logits, q_continue_logits
+        ) = inner_result[:3]
+        analysis_outputs = inner_result[3] if analysis_request is not None else {}
 
         outputs = {
             "logits": logits,
             "q_halt_logits": q_halt_logits,
             "q_continue_logits": q_continue_logits
         }
+        outputs.update(analysis_outputs)
 
         with torch.no_grad():
             # Step
@@ -415,7 +606,9 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
                     # NOTE: No replay buffer and target networks for computing target Q-value.
                     # As batch_size is large, there're many parallel envs.
                     # Similar concept as PQN https://arxiv.org/abs/2407.04811
-                    _, _, (next_q_halt_logits, next_q_continue_logits), _, _ = self.inner(new_inner_carry, new_current_data)
+                    _, _, (
+                        next_q_halt_logits, next_q_continue_logits
+                    ) = self.inner(new_inner_carry, new_current_data)
                     outputs["target_q_continue"] = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
 
         return TinyRecursiveReasoningModel_ACTV1Carry(new_inner_carry, new_steps, halted, new_current_data), outputs

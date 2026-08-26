@@ -7,7 +7,7 @@ from torch import nn
 
 
 class HistoryAggregator(nn.Module, ABC):
-    """Common interface for all latent-history aggregation methods.
+    """Common interface for within-H-cycle latent-history readers.
 
     Inputs
     ------
@@ -15,10 +15,12 @@ class HistoryAggregator(nn.Module, ABC):
         Current latent state with shape [B, L, D].
 
     history_z:
-        Detached latent-history buffer with shape [B, K, L, D].
+        States from the current H cycle with shape [B, K, L, D].  It includes
+        the initial z_L and every state preceding ``current_z``.
 
     history_lengths:
-        Number of valid historical states per batch element, shape [B].
+        Optional number of valid states per batch element.  The recursive
+        model normally supplies a dense, equally-sized history.
 
     Returns
     -------
@@ -30,7 +32,7 @@ class HistoryAggregator(nn.Module, ABC):
     --------
     - Aggregators must not modify the input tensors in-place.
     - Only the first history_lengths[b] entries are valid for sample b.
-    - The history buffer contains only previously completed outer states.
+    - History never crosses an H-cycle or ACT supervision boundary.
     - Output shape and dtype must match current_z.
     """
 
@@ -39,6 +41,7 @@ class HistoryAggregator(nn.Module, ABC):
         self,
         current_z: torch.Tensor,
         history_z: torch.Tensor,
-        history_lengths: torch.Tensor,
-    ) -> torch.Tensor:
+        history_lengths: torch.Tensor | None = None,
+        return_diagnostics: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         raise NotImplementedError

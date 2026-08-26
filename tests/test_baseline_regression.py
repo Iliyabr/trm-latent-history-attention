@@ -1,4 +1,5 @@
 ﻿from pathlib import Path
+import pytest
 import yaml
 import torch
 
@@ -32,10 +33,14 @@ def load_config():
 def test_baseline_checkpoint_and_forward_cpu():
     config = load_config()
     device = torch.device("cpu")
+    dataset_root = ROOT / "data" / "sudoku-baseline-v2"
+    checkpoint = ROOT / "checkpoints" / "baseline-v2-smoke" / "step_250"
+    if not (dataset_root / "dev" / "dataset.json").exists() or not checkpoint.exists():
+        pytest.skip("optional Phase-1 baseline artifacts are not present")
 
     ds_cfg = PuzzleDatasetConfig(
         seed=config.seed,
-        dataset_paths=[str(ROOT / "data" / "sudoku-baseline-v2")],
+        dataset_paths=[str(dataset_root)],
         global_batch_size=config.global_batch_size,
         test_set_mode=True,
         epochs_per_iter=1,

@@ -1,0 +1,15 @@
+# Colab/T4 study deps. Do not install adam-atan2 or triton: they fail on
+# Colab Python 3.13, and the Colab preset uses PyTorch AdamW.
+# Colab already provides torch.
+einops
+tqdm
+coolname
+pydantic
+argdantic
+wandb
+omegaconf
+hydra-core
+huggingface_hub
+packaging
+matplotlib
+pyyaml

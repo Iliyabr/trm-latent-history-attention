@@ -104,4 +104,7 @@ and P1 vs B3 comparisons. Figures are written as `accuracy.pdf`,
 `learning_curves.pdf`, `compute.pdf`, `corruption.pdf`, and `attention.pdf`.
 
 The companion `TRM_Latent_History_Colab.ipynb` covers setup, data preparation,
-single/suite execution, resume, and output inspection.
+single/suite execution, resume, and output inspection. Colab should install
+`requirements-colab.txt` (not `requirements.txt`): the latter includes
+`adam-atan2` and `triton`, which fail to build on Colab Python 3.13. The Colab
+preset uses AdamW.

@@ -8,17 +8,28 @@ hydra:
   run:
     dir: .
 
-# Same architecture as the short Colab preset so B0 vs P1 stays comparable.
-# Short run: 64 epochs ≈ 8 min. This is 1536 epochs ≈ 24× that (~1.5–2 h on a T4).
+# Same D256 / H2 / L4 / ACT6 architecture as config/arch/trm_history_colab.yaml.
+# Edit this file for a new long B0 vs P1 run. epochs must be divisible by
+# eval_interval. Optimizer steps ≈ epochs * 900 / global_batch_size.
+
 data_paths: [data/sudoku-study-v1]
 data_paths_test: []
 eval_split: dev
 evaluators: []
 
-global_batch_size: 32
+# --- duration (short Colab suite was epochs=64, eval_interval=4, cap=55) ---
+# 1536 epochs ≈ 43k steps ≈ 1.5–2 h on a T4. 1024 ≈ 1 h; 8192 was ~9 h.
 epochs: 1536
 eval_interval: 64
+max_runtime_minutes: 120
 checkpoint_every_eval: true
+
+# --- memory / speed ---
+global_batch_size: 32          # drop to 16 on CUDA OOM
+compile_model: false           # T4 cannot compile bfloat16
+dataloader_num_workers: 1
+
+# --- optimizer ---
 lr: 1e-4
 lr_min_ratio: 0.1
 lr_warmup_steps: 500
@@ -27,6 +38,7 @@ beta2: 0.95
 weight_decay: 0.1
 puzzle_emb_lr: 1e-2
 puzzle_emb_weight_decay: 0.1
+optimizer: adamw
 
 seed: 0
 min_eval_interval: 0
@@ -40,13 +52,8 @@ metrics_dir: null
 metrics_jsonl: null
 
 device: auto
-compile_model: false
-dataloader_num_workers: 1
 cpu_threads: null
-optimizer: adamw
 wandb_mode: disabled
-# Stop around 2h even if step time is slower than expected.
-max_runtime_minutes: 120
 deterministic: true
 best_dev_metric: exact_accuracy
 best_dev_mode: max

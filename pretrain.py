@@ -893,7 +893,11 @@ def launch(hydra_config: DictConfig):
     no_improvement_evals = int(resume_extra.get("no_improvement_evals", 0))
     if RANK == 0:
         progress_bar = tqdm.tqdm(
-            total=train_state.total_steps, initial=train_state.step
+            total=train_state.total_steps,
+            initial=train_state.step,
+            file=sys.stdout,
+            mininterval=2.0,
+            dynamic_ncols=True,
         )
         if wandb is not None:
             wandb.init(

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -47,6 +48,7 @@ def command_for(
     run_dir = output_root / preset / run_name
     command = [
         sys.executable,
+        "-u",
         "pretrain.py",
         f"--config-name=experiment/sudoku_study_{preset}",
         f"seed={seed}",
@@ -98,7 +100,9 @@ def execute(
         + "\n",
         encoding="utf-8",
     )
-    completed = subprocess.run(command, check=False)
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    completed = subprocess.run(command, check=False, env=env)
     status_path.write_text(
         json.dumps(
             {

@@ -98,7 +98,8 @@ def test_run_study_dry_run_emits_all_fifteen_jobs():
     command, run_dir = command_for(
         "P1", 0, "colab", Path("outputs/study"), None, []
     )
-    assert command[1] == "pretrain.py"
+    assert command[1] == "-u"
+    assert command[2] == "pretrain.py"
     assert "arch.history_mode=P1" in command
     assert run_dir.name == "P1-seed0"
 

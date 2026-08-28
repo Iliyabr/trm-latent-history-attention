@@ -110,8 +110,10 @@ def test_hydra_study_presets_compose():
             overrides=["arch.history_mode=P1", "arch.history_enabled=true"],
         )
         publication = compose(config_name="experiment/sudoku_study_publication")
+        heavy = compose(config_name="experiment/sudoku_study_colab_heavy")
     colab_cfg = PretrainConfig(**OmegaConf.to_container(colab, resolve=True))
     publication_cfg = PretrainConfig(**OmegaConf.to_container(publication, resolve=True))
+    heavy_cfg = PretrainConfig(**OmegaConf.to_container(heavy, resolve=True))
     assert colab_cfg.arch.hidden_size == 256
     assert colab_cfg.arch.history_rank == 64
     assert colab_cfg.arch.H_cycles == 2
@@ -121,3 +123,8 @@ def test_hydra_study_presets_compose():
     assert publication_cfg.arch.hidden_size == 512
     assert publication_cfg.arch.history_rank == 128
     assert publication_cfg.max_runtime_minutes is None
+    assert heavy_cfg.arch.hidden_size == 256
+    assert heavy_cfg.epochs == 8192
+    assert heavy_cfg.epochs % heavy_cfg.eval_interval == 0
+    assert heavy_cfg.max_runtime_minutes == 700
+    assert heavy_cfg.compile_model is False

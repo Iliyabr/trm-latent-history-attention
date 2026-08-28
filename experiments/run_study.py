@@ -122,7 +122,11 @@ def execute(
 
 
 def add_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--preset", choices=("colab", "publication"), default="colab")
+    parser.add_argument(
+        "--preset",
+        choices=("colab", "colab_heavy", "publication"),
+        default="colab",
+    )
     parser.add_argument(
         "--output-root", type=Path, default=Path("outputs/study")
     )

@@ -53,8 +53,8 @@ and temporal rank 64 with four heads. Its batch size is a conservative T4
 starting point; reduce it if a variant exceeds available VRAM.
 
 `colab_heavy` keeps the same D256 architecture but raises the epoch budget to
-8192 (~230k optimizer steps) and the wall-clock cap to 700 minutes. Use it for
-a long B0 vs P1 seed-0 comparison. Outputs go under
+1536 (~43k optimizer steps, about 1.5–2 hours on a T4) and the wall-clock cap
+to 120 minutes. Use it for a longer B0 vs P1 seed-0 comparison. Outputs go under
 `outputs/study/colab_heavy/` so they do not overwrite the short Colab runs.
 
 `publication` uses D512, H3/L6, ACT16, and temporal rank 128. The scaled Colab

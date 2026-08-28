@@ -125,7 +125,7 @@ def test_hydra_study_presets_compose():
     assert publication_cfg.arch.history_rank == 128
     assert publication_cfg.max_runtime_minutes is None
     assert heavy_cfg.arch.hidden_size == 256
-    assert heavy_cfg.epochs == 8192
+    assert heavy_cfg.epochs == 1536
     assert heavy_cfg.epochs % heavy_cfg.eval_interval == 0
-    assert heavy_cfg.max_runtime_minutes == 700
+    assert heavy_cfg.max_runtime_minutes == 120
     assert heavy_cfg.compile_model is False

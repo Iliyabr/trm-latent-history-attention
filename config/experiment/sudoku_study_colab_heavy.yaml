@@ -9,16 +9,15 @@ hydra:
     dir: .
 
 # Same architecture as the short Colab preset so B0 vs P1 stays comparable.
-# The short run finished ~1800 steps in ~8 minutes; this budget is ~128×
-# more steps so a T4 session hits the wall-clock cap instead of the epoch cap.
+# Short run: 64 epochs ≈ 8 min. This is 1536 epochs ≈ 24× that (~1.5–2 h on a T4).
 data_paths: [data/sudoku-study-v1]
 data_paths_test: []
 eval_split: dev
 evaluators: []
 
 global_batch_size: 32
-epochs: 8192
-eval_interval: 32
+epochs: 1536
+eval_interval: 64
 checkpoint_every_eval: true
 lr: 1e-4
 lr_min_ratio: 0.1
@@ -46,8 +45,8 @@ dataloader_num_workers: 1
 cpu_threads: null
 optimizer: adamw
 wandb_mode: disabled
-# ~11h40m: write runtime_cap.pt before a typical 12h Colab disconnect.
-max_runtime_minutes: 700
+# Stop around 2h even if step time is slower than expected.
+max_runtime_minutes: 120
 deterministic: true
 best_dev_metric: exact_accuracy
 best_dev_mode: max

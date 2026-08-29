@@ -86,7 +86,7 @@ resume without reconstructing earlier decisions.
   pipeline only and must never be used as a research result.
 - Added `.gitignore` rules for generated datasets, checkpoints, logs, W&B data,
   caches, virtual environments, and large model files.
-- Added `CPU_LOCAL.md` with the exact Windows/Conda setup and execution commands.
+- Added `docs/CPU_LOCAL.md` with the exact Windows/Conda setup and execution commands.
 - Added `requirements-cpu.txt`, intentionally excluding CUDA, Triton, and
   `adam-atan2`.
 
@@ -162,8 +162,13 @@ Tiny Recursion Model (TRM) recursively improves its predicted answer y with a ti
 ### Requirements
 
 > **CPU-only Windows users:** use the tested local workflow in
-> [CPU_LOCAL.md](CPU_LOCAL.md). It avoids CUDA, Triton, large batches, and online
-> experiment logging. The commands below are the original GPU workflow.
+> [CPU_LOCAL.md](docs/CPU_LOCAL.md). It avoids CUDA, Triton, large batches, and online
+> experiment logging.
+>
+> **Linux GPU server (GTX 1080 Ti):** use
+> [SERVER_GPU.md](docs/SERVER_GPU.md) for clone, `python3`/venv, float32
+> training, test, and a glossary of study flags. The commands below are the
+> original upstream GPU workflow.
 
 Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).
 

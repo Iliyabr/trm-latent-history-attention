@@ -57,6 +57,10 @@ starting point; reduce it if a variant exceeds available VRAM.
 to 120 minutes. Use it for a longer B0 vs P1 seed-0 comparison. Outputs go under
 `outputs/study/colab_heavy/` so they do not overwrite the short Colab runs.
 
+On a GTX 1080 Ti or other Pascal GPU, follow [docs/SERVER_GPU.md](../docs/SERVER_GPU.md):
+override `arch.forward_dtype=float32` and `max_runtime_minutes=null`. Do not
+install `requirements.txt`.
+
 `publication` uses D512, H3/L6, ACT16, and temporal rank 128. The scaled Colab
 preset changes model capacity and inference depth. Its inference results are
 useful for pipeline validation and directional comparisons, but must not be

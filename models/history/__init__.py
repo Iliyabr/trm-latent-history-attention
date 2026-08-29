@@ -6,6 +6,7 @@ from .gated import GatedHistory
 from .last_state import LastStateHistory
 from .attention import HistoryAttention
 from .residual import ResidualHistory
+from .parameter_matched import ParameterMatchedNoHistory
 from .factory import build_history_aggregator, normalize_history_mode
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "LastStateHistory",
     "HistoryAttention",
     "ResidualHistory",
+    "ParameterMatchedNoHistory",
     "build_history_aggregator",
     "normalize_history_mode",
 ]

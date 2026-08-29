@@ -1,41 +1,31 @@
 ﻿# Latent History Module Interface
 
-This directory defines the shared interface for within-H-cycle `z_L` history readers.
+Within-H-cycle `z_L` history readers for **TRM_HISTORY_CANONICAL_PROTOCOL_v1**.
 
-## Scientific purpose
+## Semantics
 
-History is reset at the start of every outer H cycle. During that cycle the
-module stores the initial `z_L` and every subsequently produced inner state:
+History resets at every outer H-cycle. Order: **read → TRM update → append**.
+History never crosses an H-cycle or ACT boundary.
 
-```
-H = [z_0, z_1, ..., z_{k-1}]
-```
+## Canonical family
 
-The current state queries this history *before* the shared TRM update. After
-the answer/`z_H` update, only the final `y`/`z` pair is carried to the next
-outer or ACT step. History never crosses an H-cycle or ACT boundary.
+| ID | Config name | Behavior |
+|----|-------------|----------|
+| B0 | `none` | Vanilla TRM (identity) |
+| Gated | `gated` | Mean of RMSNorm'd history; `z + σ(g)·context` then RMSNorm; gate init −2 |
+| P1 | `attention` | Low-rank temporal attention; **pre-QKV** `W RMSNorm_D(·)`; gate init −2 |
+| B3 | `parameter_matched` | No history; `D→2r→D` gated side path; **exactly** `4·D·r+1` params |
+
+## Legacy (screening only; not protocol controls)
+
+| ID | Config name | Behavior |
+|----|-------------|----------|
+| B1 | `residual` | RMSNorm residual around backbone update |
+| B2 | `uniform` | Ungated `RMSNorm(z + mean(history))` |
 
 ## Tensor contract
-
-Every history aggregator receives:
 
 - `current_z`: `[B, L, D]`
 - `history_z`: `[B, K, L, D]`
 - optional `history_lengths`: `[B]`
-
-and returns a tensor with the same shape and dtype as `current_z`.
-
-## Experiment modes
-
-| ID | Config name | Behavior |
-|---|---|---|
-| B0 | `none` | Identity / vanilla TRM |
-| B1 | `residual` | RMSNorm residual around the backbone update |
-| B2 | `uniform` | Uniform mean of the within-cycle history |
-| P1 | `attention` | Low-rank multi-head temporal attention |
-| B3 | `parameter_matched` | Identity reader; extra FFN width lives in the backbone |
-| optional | `static_lag` | Latest-state history ablation |
-
-Diagnostics, state deletion, and latent corruption are evaluation-only. They
-are requested through `analysis_request` and are not stored on the module
-during training.
+- returns same shape/dtype as `current_z`

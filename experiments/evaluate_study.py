@@ -22,7 +22,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-VARIANTS = ("B0", "B1", "B2", "B3", "P1")
+VARIANTS = ("B0", "B1", "B2", "B3", "P1", "Gated")
 CORRUPTION_SIGMAS = (0.05, 0.10, 0.20)
 IGNORE_LABEL_ID = -100
 

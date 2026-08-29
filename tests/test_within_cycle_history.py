@@ -117,7 +117,7 @@ def test_history_resets_each_h_cycle_and_l_cycles_one_works():
 
 
 @pytest.mark.parametrize(
-    "mode", ["none", "residual", "uniform", "attention", "parameter_matched"]
+    "mode", ["none", "residual", "uniform", "gated", "attention", "parameter_matched"]
 )
 def test_all_variants_forward_and_backward(mode):
     model = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config(mode))
@@ -149,7 +149,7 @@ def test_b0_is_exact_vanilla_and_old_config_alias_loads():
     assert torch.equal(first[1], second[1])
 
 
-def test_parameter_matched_b3_is_close_to_p1_added_parameters():
+def test_parameter_matched_matches_p1_added_parameters_exactly():
     base = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("none"))
     attention = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("attention"))
     matched = TinyRecursiveReasoningModel_ACTV1_Inner(
@@ -159,18 +159,34 @@ def test_parameter_matched_b3_is_close_to_p1_added_parameters():
     p1_added = count(attention) - count(base)
     b3_added = count(matched) - count(base)
     assert p1_added == 4 * 16 * 8 + 1
-    # Nearest whole SwiGLU channel adds 3*D parameters per shared layer.
-    assert abs(b3_added - p1_added) <= 3 * 16 // 2
+    assert b3_added == p1_added
     assert sum(
         p.numel() for p in matched.history_aggregator.parameters()
-    ) == 0
+    ) == p1_added
+
+
+def test_gated_gate_init_and_formula_contract():
+    module = build_history_aggregator("Gated", gate_init=-2.0)
+    assert torch.allclose(
+        torch.sigmoid(module.gate_logit.detach().float()),
+        torch.tensor(0.1192029),
+        atol=1e-6,
+    )
+    current = torch.randn(2, 3, 8)
+    history = torch.randn(2, 4, 3, 8)
+    out = module(current, history)
+    assert out.shape == current.shape
 
 
 def test_factory_names_and_invalid_rank():
     assert build_history_aggregator("B0").__class__.__name__ == "NoHistoryAggregator"
     assert build_history_aggregator("B1").__class__.__name__ == "ResidualHistory"
     assert build_history_aggregator("B2").__class__.__name__ == "UniformMeanHistory"
-    assert build_history_aggregator("B3").__class__.__name__ == "NoHistoryAggregator"
+    assert build_history_aggregator("Gated").__class__.__name__ == "GatedHistory"
+    assert (
+        build_history_aggregator("B3", hidden_size=16, rank=8).__class__.__name__
+        == "ParameterMatchedNoHistory"
+    )
     with pytest.raises(ValueError):
         build_history_aggregator(
             "P1", hidden_size=16, rank=7, num_heads=2

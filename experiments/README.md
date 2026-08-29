@@ -52,6 +52,10 @@ python experiments/run_study.py single --variant B0 --seed 1 \
 and temporal rank 64 with four heads. Its batch size is a conservative T4
 starting point; reduce it if a variant exceeds available VRAM.
 
+**Canonical protocol v1** (`--preset canonical`) is the primary GPU track:
+D256, **H3/L6/L2**, ACT6, rank 64, pre-QKV P1, variants **B0 / Gated / P1 / B3**.
+See [docs/CANONICAL_PROTOCOL_v1.md](../docs/CANONICAL_PROTOCOL_v1.md).
+
 `colab_heavy` keeps the same D256 architecture but raises the epoch budget to
 1536 (~43k optimizer steps, about 1.5–2 hours on a T4) and the wall-clock cap
 to 120 minutes. Use it for a longer B0 vs P1 seed-0 comparison. Outputs go under
@@ -59,7 +63,8 @@ to 120 minutes. Use it for a longer B0 vs P1 seed-0 comparison. Outputs go under
 
 On a GTX 1080 Ti or other Pascal GPU, follow [docs/SERVER_GPU.md](../docs/SERVER_GPU.md):
 override `arch.forward_dtype=float32` and `max_runtime_minutes=null`. Do not
-install `requirements.txt`.
+install `requirements.txt`. For canonical runs, prefer `--preset canonical`
+(float32 is already the default there).
 
 `publication` uses D512, H3/L6, ACT16, and temporal rank 128. The scaled Colab
 preset changes model capacity and inference depth. Its inference results are

@@ -11,7 +11,11 @@ from .base import HistoryAggregator
 
 
 class HistoryAttention(HistoryAggregator):
-    """Low-rank, token-aligned temporal attention within one H cycle."""
+    """Low-rank, token-aligned temporal attention within one H cycle.
+
+    Canonical (protocol v1) Q/K/V path:
+        q = W_Q RMSNorm_D(z),  k/v = W_{K/V} RMSNorm_D(h_i)
+    """
 
     def __init__(
         self,
@@ -53,17 +57,15 @@ class HistoryAttention(HistoryAggregator):
     def project_kv(
         self, state: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Project one state for an ephemeral within-cycle K/V cache."""
+        """Project one RMSNorm_D-normalized state for the within-cycle K/V cache."""
+        normalized = rms_norm(state, variance_epsilon=self.norm_eps)
         shape = (
             state.shape[0], 1, state.shape[1],
             self.num_heads, self.head_dim
         )
-        k = self.k_proj(state).view(shape)
-        v = self.v_proj(state).view(shape)
-        return (
-            rms_norm(k, variance_epsilon=self.norm_eps),
-            rms_norm(v, variance_epsilon=self.norm_eps),
-        )
+        k = self.k_proj(normalized).view(shape)
+        v = self.v_proj(normalized).view(shape)
+        return k, v
 
     def append_kv(
         self,
@@ -103,22 +105,21 @@ class HistoryAttention(HistoryAggregator):
         if self.window > 0:
             valid &= positions[None, :] >= (lengths - self.window)[:, None]
 
-        # Project to low rank, split heads, then RMS-normalize Q/K/V per head.
-        # CastedLinear preserves the activation dtype for mixed precision.
-        q = self.q_proj(current_z).view(
+        # Proposal / protocol v1: RMSNorm in D, then low-rank project.
+        q = self.q_proj(
+            rms_norm(current_z, variance_epsilon=self.norm_eps)
+        ).view(
             current_z.shape[0], current_z.shape[1], self.num_heads, self.head_dim
         )
         if kv_cache is None:
-            k = self.k_proj(history_z).view(
+            normalized_h = rms_norm(history_z, variance_epsilon=self.norm_eps)
+            k = self.k_proj(normalized_h).view(
                 current_z.shape[0], max_steps, current_z.shape[1],
                 self.num_heads, self.head_dim
             )
-            v = self.v_proj(history_z).view_as(k)
-            k = rms_norm(k, variance_epsilon=self.norm_eps)
-            v = rms_norm(v, variance_epsilon=self.norm_eps)
+            v = self.v_proj(normalized_h).view_as(k)
         else:
             k, v = kv_cache
-        q = rms_norm(q, variance_epsilon=self.norm_eps)
 
         # [B, heads, token, time], independently at every token position.
         scores = torch.einsum("blhd,btlhd->bhlt", q.float(), k.float())
@@ -161,7 +162,9 @@ class HistoryAttention(HistoryAggregator):
             weights = torch.softmax(scores, dim=-1)
             weights = weights * retained[:, None, None, :].to(weights.dtype)
         memory = torch.einsum("bhlt,btlhd->blhd", weights, v.float())
-        memory = self.o_proj(memory.reshape(*current_z.shape[:2], self.rank).to(current_z.dtype))
+        memory = self.o_proj(
+            memory.reshape(*current_z.shape[:2], self.rank).to(current_z.dtype)
+        )
 
         gate = torch.sigmoid(self.gate_logit).to(current_z.dtype)
         output = rms_norm(
@@ -171,7 +174,6 @@ class HistoryAttention(HistoryAggregator):
 
         if not return_diagnostics:
             return output
-        # Diagnostics are created only for an explicit request and detached.
         diagnostics = {
             "attention_weights": weights.detach(),
             "attention_entropy": (

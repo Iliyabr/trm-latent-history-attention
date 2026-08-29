@@ -171,22 +171,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             configured_mode = "none"
         self.history_mode = normalize_history_mode(configured_mode)
 
-        # B3 spends approximately P1's 4*D*rank+1 parameters on widening every
-        # shared backbone FFN. SwiGLU adds 3*D parameters per intermediate unit.
-        extra_ffn_inter = 0
-        if self.history_mode == "parameter_matched":
-            target = 4 * self.config.hidden_size * self.config.history_rank + 1
-            per_unit = (
-                3 * self.config.hidden_size * max(self.config.L_layers, 1)
-            )
-            extra_ffn_inter = max(1, round(target / per_unit))
-
-        # Reasoning Layers
+        # Canonical B3 / Parameter-Matched adds a low-rank side path in the
+        # history aggregator (exactly 4*D*r+1 params). The shared backbone FFN
+        # width is unchanged.
         self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(
             layers=[
-                TinyRecursiveReasoningModel_ACTV1Block(
-                    self.config, extra_ffn_inter=extra_ffn_inter
-                )
+                TinyRecursiveReasoningModel_ACTV1Block(self.config)
                 for _i in range(self.config.L_layers)
             ]
         )

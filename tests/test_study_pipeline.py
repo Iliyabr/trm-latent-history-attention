@@ -90,9 +90,9 @@ def test_write_split_is_readable_by_puzzle_dataset(tmp_path: Path):
 def test_run_study_dry_run_emits_all_fifteen_jobs():
     buffer = StringIO()
     with patch("sys.stdout", buffer):
-        assert run_study_main(["suite", "--dry-run"]) == 0
+        assert run_study_main(["suite", "--preset", "colab", "--dry-run"]) == 0
     text = buffer.getvalue()
-    for variant in VARIANTS:
+    for variant in ("B0", "B1", "B2", "B3", "P1"):
         for seed in (0, 1, 2):
             assert f"run_name={variant}-seed{seed}" in text
     command, run_dir = command_for(
@@ -104,6 +104,17 @@ def test_run_study_dry_run_emits_all_fifteen_jobs():
     assert run_dir.name == "P1-seed0"
 
 
+def test_run_study_canonical_suite_is_four_models():
+    buffer = StringIO()
+    with patch("sys.stdout", buffer):
+        assert run_study_main(["suite", "--preset", "canonical", "--dry-run"]) == 0
+    text = buffer.getvalue()
+    for variant in ("B0", "Gated", "P1", "B3"):
+        assert f"run_name={variant}-seed0" in text
+    assert "run_name=B1-seed0" not in text
+    assert "experiment/sudoku_study_canonical" in text
+
+
 def test_hydra_study_presets_compose():
     with initialize_config_dir(version_base=None, config_dir=str(ROOT / "config")):
         colab = compose(
@@ -112,9 +123,11 @@ def test_hydra_study_presets_compose():
         )
         publication = compose(config_name="experiment/sudoku_study_publication")
         heavy = compose(config_name="experiment/sudoku_study_colab_heavy")
+        canonical = compose(config_name="experiment/sudoku_study_canonical")
     colab_cfg = PretrainConfig(**OmegaConf.to_container(colab, resolve=True))
     publication_cfg = PretrainConfig(**OmegaConf.to_container(publication, resolve=True))
     heavy_cfg = PretrainConfig(**OmegaConf.to_container(heavy, resolve=True))
+    canonical_cfg = PretrainConfig(**OmegaConf.to_container(canonical, resolve=True))
     assert colab_cfg.arch.hidden_size == 256
     assert colab_cfg.arch.history_rank == 64
     assert colab_cfg.arch.H_cycles == 2
@@ -129,3 +142,15 @@ def test_hydra_study_presets_compose():
     assert heavy_cfg.epochs % heavy_cfg.eval_interval == 0
     assert heavy_cfg.max_runtime_minutes == 120
     assert heavy_cfg.compile_model is False
+    assert canonical_cfg.arch.hidden_size == 256
+    assert canonical_cfg.arch.H_cycles == 3
+    assert canonical_cfg.arch.L_cycles == 6
+    assert canonical_cfg.arch.L_layers == 2
+    assert canonical_cfg.arch.halt_max_steps == 6
+    assert canonical_cfg.arch.history_rank == 64
+    assert canonical_cfg.arch.history_window == 0
+    assert canonical_cfg.arch.forward_dtype == "float32"
+    assert canonical_cfg.global_batch_size == 32
+    assert canonical_cfg.optimizer == "adamw"
+    assert canonical_cfg.compile_model is False
+    assert canonical_cfg.max_runtime_minutes is None

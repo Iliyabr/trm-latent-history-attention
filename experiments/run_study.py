@@ -1,4 +1,4 @@
-"""Launch the deterministic B0/B1/B2/B3/P1 multi-seed study."""
+"""Launch the latent-history Sudoku study (canonical + legacy Colab presets)."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Sequence
 
 
-VARIANTS = ("B0", "B1", "B2", "B3", "P1")
+# Canonical protocol v1 family (primary).
+CANONICAL_VARIANTS = ("B0", "Gated", "P1", "B3")
+# Legacy Colab screening labels (B1 residual, B2 ungated uniform) still launchable.
+VARIANTS = ("B0", "B1", "B2", "B3", "P1", "Gated")
 SEEDS = (0, 1, 2)
 VARIANT_OVERRIDES = {
     "B0": ("arch.history_enabled=false", "arch.history_mode=B0"),
@@ -20,6 +23,7 @@ VARIANT_OVERRIDES = {
     "B2": ("arch.history_enabled=true", "arch.history_mode=B2"),
     "B3": ("arch.history_enabled=true", "arch.history_mode=B3"),
     "P1": ("arch.history_enabled=true", "arch.history_mode=P1"),
+    "Gated": ("arch.history_enabled=true", "arch.history_mode=Gated"),
 }
 
 
@@ -128,8 +132,8 @@ def execute(
 def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--preset",
-        choices=("colab", "colab_heavy", "publication"),
-        default="colab",
+        choices=("canonical", "colab", "colab_heavy", "publication"),
+        default="canonical",
     )
     parser.add_argument(
         "--output-root", type=Path, default=Path("outputs/study")
@@ -152,7 +156,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     single.add_argument("--seed", type=int, choices=SEEDS, required=True)
     add_common(single)
 
-    suite = subparsers.add_parser("suite", help="Run all 15 jobs serially")
+    suite = subparsers.add_parser(
+        "suite",
+        help="Run the preset's variant matrix serially",
+    )
     add_common(suite)
 
     resume = subparsers.add_parser("resume", help="Resume one variant/seed")
@@ -165,6 +172,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_common(resume)
     return parser.parse_args(argv)
+
+
+def suite_variants(preset: str) -> tuple[str, ...]:
+    if preset == "canonical":
+        return CANONICAL_VARIANTS
+    return ("B0", "B1", "B2", "B3", "P1")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -180,7 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             checkpoint = run_dir / "runtime_cap.pt"
         execute(args.variant, args.seed, args, checkpoint)
     else:
-        for variant in VARIANTS:
+        for variant in suite_variants(args.preset):
             for seed in SEEDS:
                 execute(variant, seed, args)
     return 0

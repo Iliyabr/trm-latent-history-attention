@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 
-VARIANT_ORDER = ("B0", "B1", "B2", "B3", "P1")
+VARIANT_ORDER = ("B0", "Gated", "B1", "B2", "B3", "P1")
 METRICS = (
     "exact_accuracy",
     "cell_accuracy",

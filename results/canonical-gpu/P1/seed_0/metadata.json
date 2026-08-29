@@ -1,0 +1,35 @@
+{
+  "variant": "P1",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.009,
+    "cell_accuracy": 0.6389876543209877,
+    "incorrect_cells": 29.242,
+    "row_violations": 7.658,
+    "column_violations": 8.142,
+    "box_violations": 8.032
+  },
+  "wall_time_seconds": 34.23273052500008,
+  "inference_latency_seconds": {
+    "mean_batch": 0.7415104943440838,
+    "p50_batch": 0.5759926810005709
+  },
+  "throughput_examples_per_second": 42.14370563648292,
+  "parameters": {
+    "total": 1775619,
+    "trainable": 1775619
+  },
+  "peak_vram_bytes": 113478144,
+  "attention": {
+    "expected_lookback": 2.3143187450865903,
+    "non_adjacent_mass": 0.6021175030618906,
+    "entropy": 1.0117093411584694
+  },
+  "checkpoint": "/home/mahyar/trm-latent-history-attention/outputs/study/canonical/P1-seed0/step_28800.pt",
+  "checkpoint_load": {
+    "matched_keys": 20,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

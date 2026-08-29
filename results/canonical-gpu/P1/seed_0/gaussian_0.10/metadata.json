@@ -1,0 +1,35 @@
+{
+  "variant": "P1",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.009,
+    "cell_accuracy": 0.639074074074074,
+    "incorrect_cells": 29.235,
+    "row_violations": 7.68,
+    "column_violations": 8.142,
+    "box_violations": 8.032
+  },
+  "wall_time_seconds": 29.714551666998887,
+  "inference_latency_seconds": {
+    "mean_batch": 0.5806970470000579,
+    "p50_batch": 0.5775461320008617
+  },
+  "throughput_examples_per_second": 53.814635637361675,
+  "parameters": {
+    "total": 1775619,
+    "trainable": 1775619
+  },
+  "peak_vram_bytes": 120130560,
+  "attention": {
+    "expected_lookback": 2.314280841499567,
+    "non_adjacent_mass": 0.6021151722719272,
+    "entropy": 1.0110428119078279
+  },
+  "intervention": {
+    "name": "gaussian_0.10",
+    "kind": "gaussian",
+    "sigma_rms": 0.1,
+    "matched_draw_key": "gaussian_0.10"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "variant": "P1",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.009,
+    "cell_accuracy": 0.6394444444444445,
+    "incorrect_cells": 29.205,
+    "row_violations": 7.677,
+    "column_violations": 8.126,
+    "box_violations": 8.043
+  },
+  "wall_time_seconds": 29.069208495002385,
+  "inference_latency_seconds": {
+    "mean_batch": 0.5818435414372516,
+    "p50_batch": 0.5688409199992748
+  },
+  "throughput_examples_per_second": 53.70859651171384,
+  "parameters": {
+    "total": 1775619,
+    "trainable": 1775619
+  },
+  "peak_vram_bytes": 113478144,
+  "attention": {
+    "expected_lookback": 2.107556518788139,
+    "non_adjacent_mass": 0.5637390532841285,
+    "entropy": 0.7426138754623631
+  },
+  "intervention": {
+    "name": "delete_most_attended",
+    "kind": "delete",
+    "rank": "most"
+  }
+}

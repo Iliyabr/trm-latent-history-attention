@@ -26,6 +26,45 @@ If the repo is already on the machine:
 git fetch origin
 git checkout feature/latent-history-attention
 git pull origin feature/latent-history-attention
+git log -1 --oneline
+ls scripts/run_canonical_8h_server.sh
+```
+
+If `git pull` leaves you on an old commit (e.g. `d37a107`) or new scripts are
+missing, force-sync to GitHub (discards uncommitted repo edits):
+
+```bash
+bash scripts/update_from_github.sh
+```
+
+Or manually:
+
+```bash
+git fetch origin feature/latent-history-attention
+git checkout feature/latent-history-attention
+git reset --hard origin/feature/latent-history-attention
+```
+
+You should see `23e99a1` or newer and `scripts/run_canonical_8h_server.sh`.
+
+If git still fails, download the script directly:
+
+```bash
+mkdir -p scripts config/experiment
+curl -fsSL -o scripts/run_canonical_8h_server.sh \
+  https://raw.githubusercontent.com/Iliyabr/trm-latent-history-attention/feature/latent-history-attention/scripts/run_canonical_8h_server.sh
+curl -fsSL -o config/experiment/sudoku_study_canonical_8h.yaml \
+  https://raw.githubusercontent.com/Iliyabr/trm-latent-history-attention/feature/latent-history-attention/config/experiment/sudoku_study_canonical_8h.yaml
+curl -fsSL -o scripts/update_from_github.sh \
+  https://raw.githubusercontent.com/Iliyabr/trm-latent-history-attention/feature/latent-history-attention/scripts/update_from_github.sh
+chmod +x scripts/run_canonical_8h_server.sh scripts/update_from_github.sh
+```
+
+Confirm the remote URL matches where you push from your laptop:
+
+```bash
+git remote -v
+# should be https://github.com/Iliyabr/trm-latent-history-attention.git
 ```
 
 Skip Colab junk: extra nested clones, `.venv`, `__pycache__`. Copy data and

@@ -132,7 +132,7 @@ def execute(
 def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--preset",
-        choices=("canonical", "colab", "colab_heavy", "publication"),
+        choices=("canonical", "canonical_8h", "colab", "colab_heavy", "publication"),
         default="canonical",
     )
     parser.add_argument(
@@ -175,7 +175,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def suite_variants(preset: str) -> tuple[str, ...]:
-    if preset == "canonical":
+    if preset in ("canonical", "canonical_8h"):
         return CANONICAL_VARIANTS
     return ("B0", "B1", "B2", "B3", "P1")
 

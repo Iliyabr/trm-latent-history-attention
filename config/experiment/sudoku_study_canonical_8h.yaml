@@ -1,0 +1,58 @@
+# @package _global_
+defaults:
+  - /arch@arch: trm_history_canonical
+  - _self_
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+
+# Longer canonical screening run for 1080 Ti (~8 h budget).
+# Transformer L-stack (mlp_t=false, RoPE) + paper ACT depth (16).
+# Stop via max_runtime_minutes in the shell script, not by hitting epochs.
+#
+# Optimizer steps if uncapped: epochs * 900 / global_batch_size
+#   8192 epochs -> 230_400 steps (~8x the 1024-epoch screening run)
+
+data_paths: [data/sudoku-study-v1]
+data_paths_test: []
+eval_split: dev
+evaluators: []
+
+global_batch_size: 32
+epochs: 8192
+eval_interval: 64
+checkpoint_every_eval: true
+max_runtime_minutes: 480
+
+lr: 1e-4
+lr_min_ratio: 0.1
+lr_warmup_steps: 500
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+puzzle_emb_lr: 1e-2
+puzzle_emb_weight_decay: 0.1
+optimizer: adamw
+
+seed: 0
+min_eval_interval: 0
+ema: true
+ema_rate: 0.999
+freeze_weights: false
+project_name: trm-latent-history-canonical-8h
+run_name: null
+checkpoint_path: null
+metrics_dir: null
+metrics_jsonl: null
+
+device: auto
+compile_model: false
+dataloader_num_workers: 1
+cpu_threads: null
+wandb_mode: disabled
+deterministic: true
+best_dev_metric: exact_accuracy
+best_dev_mode: max
+plateau_patience_evals: 20

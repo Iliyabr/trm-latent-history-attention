@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# One-shot canonical GPU campaign (protocol v1) — first GPU server.
+# One-shot canonical GPU campaign (protocol v1) — RTX 4090 server.
 #
-# Hardware: GTX 1080 Ti / Pascal (float32). Seed 0 only.
-# The RTX 4090 box must use scripts/run_canonical_4090.sh (seed 1).
-# Do not pool the two machines into one paired seed family (protocol §22).
+# Hardware: RTX 4090 24 GB, bfloat16, CPU cap 16 threads / 4 loader workers.
+# Seed 1 only. The other live GPU box uses scripts/run_canonical_server.sh
+# (seed 0, float32). Do not average the two machines as one matched family
+# (protocol §22: one GPU/dtype regime per paired comparison).
 #
-# Four models. Last checkpoint only (no step_*.pt every eval).
-# Label results SCREENING, not confirmatory multi-seed.
+# Four models: B0, P1, Gated, B3. Last checkpoint only.
+# Label results SCREENING (single seed on this card).
 #
 # Usage (from repo root, inside the venv):
-#   bash scripts/run_canonical_server.sh setup
-#   bash scripts/run_canonical_server.sh data
-#   bash scripts/run_canonical_server.sh train
-#   bash scripts/run_canonical_server.sh eval
-#   bash scripts/run_canonical_server.sh all
+#   bash scripts/run_canonical_4090.sh setup
+#   bash scripts/run_canonical_4090.sh data
+#   bash scripts/run_canonical_4090.sh train
+#   bash scripts/run_canonical_4090.sh eval
+#   bash scripts/run_canonical_4090.sh all
 #
 # Resume a crashed variant:
-#   bash scripts/run_canonical_server.sh resume B0
+#   bash scripts/run_canonical_4090.sh resume B0
 
 set -euo pipefail
 
@@ -24,21 +25,35 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PRESET=canonical
-SEED=0
-# Highest-value order if the job is killed late: Vanilla, Attention, Gated, B3.
+SEED=1
 VARIANTS=(B0 P1 Gated B3)
-OUTPUT_ROOT=outputs/study
-EVAL_OUT=results/canonical-gpu
-# 1080 Ti: keep float32 (canonical default). T4 only: uncomment the next line
-# after a runtime dtype check.
-# DTYPE_OVERRIDE=(--override arch.forward_dtype=bfloat16)
-DTYPE_OVERRIDE=()
+OUTPUT_ROOT=outputs/study-4090
+EVAL_OUT=results/canonical-gpu-4090
+CPU_THREADS=16
+DATALOADER_WORKERS=4
+
+# Host cap: 16 cores (user limit 15–20). OMP=2 so four loader workers cannot
+# explode BLAS threads. taskset is applied at launch when it exists.
+export OMP_NUM_THREADS=2
+export MKL_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+export NUMEXPR_NUM_THREADS=2
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+
+launch() {
+  if command -v taskset >/dev/null 2>&1; then
+    taskset -c 0-15 "$@"
+  else
+    "$@"
+  fi
+}
 
 TRAIN_OVERRIDES=(
   --override checkpoint_every_eval=false
   --override compile_model=false
   --override max_runtime_minutes=null
-  "${DTYPE_OVERRIDE[@]}"
+  --override arch.forward_dtype=bfloat16
+  --override dataloader_num_workers="${DATALOADER_WORKERS}"
 )
 
 run_dir() {
@@ -64,22 +79,45 @@ PY
 }
 
 cmd_setup() {
-  python - <<'PY'
+  python - "$CPU_THREADS" <<'PY'
+import os
+import sys
 import torch
+
+cpu_cap = int(sys.argv[1])
+torch.set_num_threads(cpu_cap)
 print("torch", torch.__version__)
 print("cuda", torch.cuda.is_available())
-if torch.cuda.is_available():
-    print("gpu", torch.cuda.get_device_name(0))
-    print("capability", torch.cuda.get_device_capability())
-    print("dtype_default float32")
-else:
-    raise SystemExit("CUDA is required for the server campaign")
+print("omp_num_threads", os.environ.get("OMP_NUM_THREADS"))
+print("torch_num_threads", torch.get_num_threads())
+if not torch.cuda.is_available():
+    raise SystemExit("CUDA is required for the 4090 campaign")
+name = torch.cuda.get_device_name(0)
+cap = torch.cuda.get_device_capability()
+print("gpu", name)
+print("capability", cap)
+print("vram_bytes", torch.cuda.get_device_properties(0).total_memory)
+bf = torch.cuda.is_bf16_supported()
+print("bf16_supported", bf)
+x = torch.ones(1, device="cuda", dtype=torch.bfloat16)
+print("bf16_runtime_ok", float((x * 2).float()))
+if cap < (8, 0):
+    raise SystemExit(f"expected Ampere+ for bfloat16, got {name} {cap}")
+if "4090" not in name and "4080" not in name:
+    print("WARNING: this script is tuned for RTX 4090; found", name)
 PY
   mkdir -p "$OUTPUT_ROOT/$PRESET" "$EVAL_OUT" artifacts
   {
     echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "host=$(hostname)"
+    echo "script=run_canonical_4090.sh"
+    echo "seed=${SEED}"
+    echo "dtype=bfloat16"
+    echo "cpu_threads=${CPU_THREADS}"
+    echo "dataloader_workers=${DATALOADER_WORKERS}"
     echo "git=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
     echo "git_status=$(git status --porcelain | tr '\n' ';')"
+    nproc --all 2>/dev/null || true
     nvidia-smi -L || true
     nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv || true
   } | tee "$OUTPUT_ROOT/$PRESET/provenance.txt"
@@ -95,8 +133,8 @@ cmd_data() {
 
 cmd_train() {
   for variant in "${VARIANTS[@]}"; do
-    echo "===== TRAIN ${variant} seed ${SEED} ====="
-    python experiments/run_study.py single \
+    echo "===== TRAIN ${variant} seed ${SEED} (4090 / bfloat16) ====="
+    launch python experiments/run_study.py single \
       --preset "$PRESET" \
       --variant "$variant" \
       --seed "$SEED" \
@@ -106,7 +144,7 @@ cmd_train() {
 }
 
 cmd_resume() {
-  local variant="${1:?usage: bash scripts/run_canonical_server.sh resume VARIANT}"
+  local variant="${1:?usage: bash scripts/run_canonical_4090.sh resume VARIANT}"
   local dir
   dir="$(run_dir "$variant")"
   local ckpt=""
@@ -121,7 +159,7 @@ cmd_resume() {
     echo "No checkpoint in $dir; start train from scratch instead."
     exit 1
   fi
-  python experiments/run_study.py resume \
+  launch python experiments/run_study.py resume \
     --preset "$PRESET" \
     --variant "$variant" \
     --seed "$SEED" \
@@ -149,8 +187,8 @@ cmd_eval() {
     echo "EVAL ${variant} <- $ckpt"
     args+=(--checkpoint "${variant}=${ckpt}")
   done
-  python experiments/evaluate_study.py "${args[@]}"
-  python experiments/analyze_results.py \
+  launch python experiments/evaluate_study.py "${args[@]}"
+  launch python experiments/analyze_results.py \
     --input "$EVAL_OUT" \
     --output "$EVAL_OUT/analysis"
 }
@@ -170,7 +208,7 @@ case "${1:-all}" in
   eval) cmd_eval ;;
   all) cmd_all ;;
   *)
-    echo "usage: bash scripts/run_canonical_server.sh {setup|data|train|resume VARIANT|eval|all}"
+    echo "usage: bash scripts/run_canonical_4090.sh {setup|data|train|resume VARIANT|eval|all}"
     exit 2
     ;;
 esac

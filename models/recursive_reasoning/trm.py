@@ -11,6 +11,9 @@ from models.common import trunc_normal_init_
 from models.layers import rms_norm, LinearSwish, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
 from models.sparse_embedding import CastedSparseEmbedding
 from models.history import build_history_aggregator
+from models.history.lcycle_lowrank_attention import LcycleLowRankHistoryAttention
+from models.history.lcycle_gated import LcycleGatedHistory
+from models.history.lcycle_param_matched import LcycleParameterMatchedNoHistory
 
 IGNORE_LABEL_ID = -100
 
@@ -72,6 +75,15 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # Recording is inert: no history state is consumed by the model yet.
     history_enabled: bool = False
     history_aggregator: str = "none"
+
+    # Proposal-track history over z_L states within each H-cycle.
+    # Kept separate from the validated outer-step z_H history mechanism.
+    lcycle_history_enabled: bool = False
+    lcycle_history_method: str = "attention"
+    lcycle_history_rank: int = 32
+    lcycle_history_heads: int = 4
+    lcycle_history_gate_init: float = 0.0
+    lcycle_history_pre_norm: bool = False
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -166,6 +178,48 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             self.config.history_aggregator
         )
 
+        # Proposal-track low-rank attention over z_L history.
+        # This module is instantiated only when explicitly enabled so that
+        # vanilla and existing z_H-history configurations gain no parameters.
+        self.lcycle_history_attention = None
+        self.lcycle_gated_history = None
+        self.lcycle_param_matched = None
+
+        if self.config.lcycle_history_enabled:
+            method = self.config.lcycle_history_method.strip().lower()
+
+            if method == "attention":
+                self.lcycle_history_attention = LcycleLowRankHistoryAttention(
+                    hidden_size=self.config.hidden_size,
+                    rank=self.config.lcycle_history_rank,
+                    num_heads=self.config.lcycle_history_heads,
+                    rms_norm_eps=self.config.rms_norm_eps,
+                    gate_init=self.config.lcycle_history_gate_init,
+                    pre_norm=self.config.lcycle_history_pre_norm,
+                )
+
+            elif method == "gated":
+                self.lcycle_gated_history = LcycleGatedHistory(
+                    rms_norm_eps=self.config.rms_norm_eps,
+                    gate_init=self.config.lcycle_history_gate_init,
+                    pre_norm=self.config.lcycle_history_pre_norm,
+                )
+
+            elif method in {"parameter_matched", "param_matched"}:
+                self.lcycle_param_matched = LcycleParameterMatchedNoHistory(
+                    hidden_size=self.config.hidden_size,
+                    bottleneck_size=2 * self.config.lcycle_history_rank,
+                    rms_norm_eps=self.config.rms_norm_eps,
+                    gate_init=self.config.lcycle_history_gate_init,
+                    pre_norm=self.config.lcycle_history_pre_norm,
+                )
+
+            else:
+                raise ValueError(
+                    "Unknown lcycle_history_method: "
+                    f"{self.config.lcycle_history_method!r}"
+                )
+
         # Initial states
         self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
         self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
@@ -175,6 +229,94 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         with torch.no_grad():
             self.q_head.weight.zero_()
             self.q_head.bias.fill_(-5)  # type: ignore
+
+    def _run_L_cycle(
+        self,
+        z_L: torch.Tensor,
+        z_H: torch.Tensor,
+        input_embeddings: torch.Tensor,
+        seq_info: Dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Run one complete L-cycle.
+
+        When proposal-track history is enabled, history is local to this
+        H-cycle. It starts with the pre-update z_L state and grows after
+        every L-step.
+        """
+
+        if not self.config.lcycle_history_enabled:
+            for _L_step in range(self.config.L_cycles):
+                z_L = self.L_level(
+                    z_L,
+                    z_H + input_embeddings,
+                    **seq_info,
+                )
+            return z_L
+
+        method = self.config.lcycle_history_method.strip().lower()
+
+        # Parameter-matched control deliberately has no access to history.
+        if method in {"parameter_matched", "param_matched"}:
+            if self.lcycle_param_matched is None:
+                raise RuntimeError(
+                    "Parameter-matched L-cycle module is missing"
+                )
+
+            for _L_step in range(self.config.L_cycles):
+                read_z = self.lcycle_param_matched(
+                    current_z=z_L,
+                )
+
+                z_L = self.L_level(
+                    read_z,
+                    z_H + input_embeddings,
+                    **seq_info,
+                )
+
+            return z_L
+
+        # Attention and Gated use exactly the same within-H-cycle history.
+        history = [z_L]
+
+        for _L_step in range(self.config.L_cycles):
+            history_z = torch.stack(history, dim=1)
+
+            if method == "attention":
+                if self.lcycle_history_attention is None:
+                    raise RuntimeError(
+                        "L-cycle attention module is missing"
+                    )
+
+                read_z = self.lcycle_history_attention(
+                    current_z=z_L,
+                    history_z=history_z,
+                )
+
+            elif method == "gated":
+                if self.lcycle_gated_history is None:
+                    raise RuntimeError(
+                        "L-cycle gated-history module is missing"
+                    )
+
+                read_z = self.lcycle_gated_history(
+                    current_z=z_L,
+                    history_z=history_z,
+                )
+
+            else:
+                raise RuntimeError(
+                    f"Unsupported L-cycle method: {method!r}"
+                )
+
+            z_L = self.L_level(
+                read_z,
+                z_H + input_embeddings,
+                **seq_info,
+            )
+
+            history.append(z_L)
+
+        return z_L
 
     def _input_embeddings(self, input: torch.Tensor, puzzle_identifiers: torch.Tensor):
         # Token embedding
@@ -279,13 +421,22 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         z_H, z_L = carry.z_H, carry.z_L
         # H_cycles-1 without grad
         with torch.no_grad():
-            for _H_step in range(self.config.H_cycles-1):
-                for _L_step in range(self.config.L_cycles):
-                    z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            for _H_step in range(self.config.H_cycles - 1):
+                z_L = self._run_L_cycle(
+                    z_L=z_L,
+                    z_H=z_H,
+                    input_embeddings=input_embeddings,
+                    seq_info=seq_info,
+                )
                 z_H = self.L_level(z_H, z_L, **seq_info)
-        # 1 with grad
-        for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+
+        # Final H-cycle with grad
+        z_L = self._run_L_cycle(
+            z_L=z_L,
+            z_H=z_H,
+            input_embeddings=input_embeddings,
+            seq_info=seq_info,
+        )
         z_H = self.L_level(z_H, z_L, **seq_info)
 
         # Optional history aggregation.

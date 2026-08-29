@@ -1,0 +1,26 @@
+{
+  "variant": "B0",
+  "seed": 0,
+  "preset": "canonical",
+  "command": [
+    "/home/mahyar/trm-latent-history-attention/.venv/bin/python",
+    "-u",
+    "pretrain.py",
+    "--config-name=experiment/sudoku_study_canonical",
+    "seed=0",
+    "run_name=B0-seed0",
+    "checkpoint_path=outputs/study/canonical/B0-seed0",
+    "metrics_dir=outputs/study/canonical/B0-seed0/metrics",
+    "metrics_jsonl=outputs/study/canonical/B0-seed0/metrics.jsonl",
+    "arch.history_enabled=false",
+    "arch.history_mode=B0",
+    "checkpoint_every_eval=false",
+    "compile_model=false",
+    "max_runtime_minutes=null"
+  ],
+  "started_utc": "2026-08-29T13:23:00.660749+00:00",
+  "finished_utc": "2026-08-29T14:26:39.611966+00:00",
+  "resume": null,
+  "status": "completed",
+  "returncode": 0
+}

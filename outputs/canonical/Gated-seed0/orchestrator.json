@@ -1,0 +1,26 @@
+{
+  "variant": "Gated",
+  "seed": 0,
+  "preset": "canonical",
+  "command": [
+    "/home/mahyar/trm-latent-history-attention/.venv/bin/python",
+    "-u",
+    "pretrain.py",
+    "--config-name=experiment/sudoku_study_canonical",
+    "seed=0",
+    "run_name=Gated-seed0",
+    "checkpoint_path=outputs/study/canonical/Gated-seed0",
+    "metrics_dir=outputs/study/canonical/Gated-seed0/metrics",
+    "metrics_jsonl=outputs/study/canonical/Gated-seed0/metrics.jsonl",
+    "arch.history_enabled=true",
+    "arch.history_mode=Gated",
+    "checkpoint_every_eval=false",
+    "compile_model=false",
+    "max_runtime_minutes=null"
+  ],
+  "started_utc": "2026-08-29T15:46:57.677663+00:00",
+  "finished_utc": "2026-08-29T16:57:49.422087+00:00",
+  "resume": null,
+  "status": "completed",
+  "returncode": 0
+}

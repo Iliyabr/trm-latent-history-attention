@@ -18,15 +18,20 @@ venv/
 # Experiment artifacts
 /data/
 checkpoints/
-outputs/
+outputs/*
+!outputs/canonical/
+outputs/canonical/**/*
+!outputs/canonical/**/
+!outputs/canonical/**/*
+outputs/canonical/**/metrics/
+outputs/canonical/**/metrics_step_*.json
+outputs/canonical/**/trm.py
+outputs/canonical/**/losses.py
 wandb/
 results/raw/
 *.pt
 *.pth
 *.ckpt
-
-# Accidental nested clone of this repository
-/trm-latent-history-attention/
 
 # Accidental nested clone of this repository
 /trm-latent-history-attention/

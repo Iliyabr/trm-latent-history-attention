@@ -1,35 +1,13 @@
-﻿# Baseline Experiment Configuration
+﻿# Baseline Experiment Configuration (historical)
 
-## Canonical Phase 1 configuration
+Phase 1 used `sudoku-small`, `sudoku-baseline-v2`, and related CPU configs.
+Those datasets and configs were removed in favor of the canonical study dataset:
 
-The canonical scientific baseline configuration is:
+- build: `python dataset/build_sudoku_baseline_v2.py`
+- output: `data/sudoku-study-v1/`
+- manifest: `artifacts/data/sudoku_study_v1_manifest.json`
 
-    config/cfg_baseline_v2.yaml
+Use `--preset canonical` (or `canonical_8h`) via `experiments/run_study.py` for
+all new training. See [experiments/README.md](../README.md).
 
-It uses:
-
-- deterministic `sudoku-baseline-v2`
-- seed 0
-- 1000 training source puzzles
-- 200 disjoint development puzzles
-- development evaluation via `eval_split: dev`
-- 20 epochs
-- batch size 4
-- CPU execution
-- metrics JSON output
-- dedicated `baseline-v2` checkpoint path
-
-## Legacy configurations
-
-The following files are retained only as historical development records:
-
-- `config/cfg_baseline_cpu.yaml`
-- `config/cfg_baseline_5epoch.yaml`
-- `config/cfg_baseline_20epoch.yaml`
-- `experiments/baseline/configs/cfg_baseline_cpu.yaml`
-
-They must not be used for new Phase 1 or HistoryAttention experiments.
-
-All future controlled comparisons should derive from:
-
-    config/cfg_baseline_v2.yaml
+`PHASE1_RESULTS.md` remains as a historical record only.

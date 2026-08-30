@@ -285,7 +285,7 @@ def main() -> None:
             sys.executable,
             "pretrain.py",
             "--config-name",
-            "cfg_baseline_v2",
+            "experiment/sudoku_study_canonical",
 
             # Fixed scientific anchor
             "arch.halt_max_steps=4",

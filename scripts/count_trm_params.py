@@ -4,7 +4,8 @@ import hydra
 import torch
 from omegaconf import OmegaConf
 
-from pretrain import PretrainConfig, create_dataloader, create_model
+from dataset.common import PuzzleDatasetMetadata
+from pretrain import PretrainConfig, create_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,7 @@ def build_config(hidden_size: int) -> PretrainConfig:
         config_dir=str(CONFIG_DIR),
     ):
         cfg = hydra.compose(
-            config_name="cfg_baseline_v2",
+            config_name="experiment/sudoku_study_canonical",
             overrides=[
                 "arch.halt_max_steps=4",
                 f"arch.hidden_size={hidden_size}",
@@ -44,15 +45,17 @@ def main():
     for hidden_size in HIDDEN_SIZES:
         config = build_config(hidden_size)
 
-        _, metadata = create_dataloader(
-            config,
-            "train",
-            rank=0,
-            world_size=1,
-            device=device,
-            test_set_mode=False,
-            epochs_per_iter=1,
-            global_batch_size=config.global_batch_size,
+        metadata = PuzzleDatasetMetadata(
+            seq_len=81,
+            vocab_size=11,
+            pad_id=0,
+            ignore_label_id=0,
+            blank_identifier_id=0,
+            num_puzzle_identifiers=1,
+            total_groups=1,
+            mean_puzzle_examples=1.0,
+            total_puzzles=1,
+            sets=["all"],
         )
 
         model, _, _ = create_model(

@@ -1,4 +1,4 @@
-﻿# TRM Latent-History Project â€” Canonical Scientific Protocol v1
+# TRM Latent-History Project — Canonical Scientific Protocol v1
 
 **Status: FROZEN**
 **Scope:** Shared scientific protocol for the CPU and GPU branches of the project.
@@ -10,7 +10,7 @@ Hardware-dependent values are recorded separately in `TRM_HISTORY_DEPLOYMENT_MAN
 
 ## 1. Research question
 
-The project is **not** framed as â€œHistoryAttention improves TRM.â€
+The project is **not** framed as “HistoryAttention improves TRM.”
 
 The canonical research question is:
 
@@ -28,7 +28,7 @@ Current evidence does not support a universal improvement claim. We have a posit
 
 ## 2. Two scientific tracks
 
-### Track A â€” outer-step `z_H` history
+### Track A — outer-step `z_H` history
 
 Supporting mechanistic study only. It is not the final proposal mechanism.
 
@@ -41,14 +41,14 @@ Completed evidence:
 | 8 | 42.659% | 43.389% | +0.730 pp |
 | 16 | 42.113% | 42.171% | +0.058 pp |
 
-At depth 8, the paired 95% CI for Attention âˆ’ Vanilla was `[+0.367,+1.110]` pp and all 5/5 seeds were positive. The depth-8 vs depth-4 interaction was not conclusive, so a monotonic depth claim is not allowed. Exact-grid accuracy was 0 in this reduced regime.
+At depth 8, the paired 95% CI for Attention − Vanilla was `[+0.367,+1.110]` pp and all 5/5 seeds were positive. The depth-8 vs depth-4 interaction was not conclusive, so a monotonic depth claim is not allowed. Exact-grid accuracy was 0 in this reduced regime.
 
 **Allowed claim:** explicit latent-history retrieval can help in a particular recursive regime.
 **Not allowed:** universal or monotonically increasing benefit.
 
 Track A is complete and must not be rerun unless a genuine bug is discovered.
 
-### Track B â€” within-H-cycle `z_L` history
+### Track B — within-H-cycle `z_L` history
 
 This is the **primary contribution** and the only history track used for new canonical experiments.
 
@@ -70,7 +70,7 @@ for each L-step:
 Frozen rules:
 
 - History location: within-H-cycle `z_L`.
-- Order: **read â†’ update â†’ append**.
+- Order: **read → update → append**.
 - The newly updated state is not inserted before the current retrieval.
 - History is not detached inside the final gradient-bearing H-cycle.
 - History resets at every H-cycle boundary.
@@ -92,7 +92,7 @@ q   = W_Q RMSNorm_D(z)
 k_i = W_K RMSNorm_D(h_i)
 v_i = W_V RMSNorm_D(h_i)
 
-score_i = (q Â· k_i) / sqrt(d_head)
+score_i = (q · k_i) / sqrt(d_head)
 alpha   = softmax_over_recursive_time(score)
 context = sum_i alpha_i v_i
 memory  = W_O(context)
@@ -256,7 +256,7 @@ Allowed interpretation:
 
 ### Remaining CPU work
 
-Do not rerun completed Track A, Vanilla 0â€“4, Attention 0â€“4, or completed Gated seeds.
+Do not rerun completed Track A, Vanilla 0–4, Attention 0–4, or completed Gated seeds.
 
 Remaining canonical CPU runs:
 
@@ -310,11 +310,11 @@ full causal within-H-cycle z_L history
 
 ### Why D256
 
-It is a meaningful 4Ã— width increase over D64 while remaining suitable for matched multi-seed replication.
+It is a meaningful 4× width increase over D64 while remaining suitable for matched multi-seed replication.
 
 ### Why H3/L6/L2
 
-Preserving the recursion structure is more important to the scientific question than maximizing width. The scale-transfer experiment should change scale while keeping the proposalâ€™s recursive structure.
+Preserving the recursion structure is more important to the scientific question than maximizing width. The scale-transfer experiment should change scale while keeping the proposal’s recursive structure.
 
 ### D512 policy
 
@@ -390,9 +390,9 @@ Target effective batch: **32**.
 
 Allowed realizations include:
 
-- physical 32 Ã— accumulation 1
-- physical 16 Ã— accumulation 2
-- physical 8 Ã— accumulation 4
+- physical 32 × accumulation 1
+- physical 16 × accumulation 2
+- physical 8 × accumulation 4
 
 Choose one realization that fits both Vanilla and canonical Attention. All variants use the same effective batch.
 
@@ -427,7 +427,7 @@ After alignment, run short validation only:
 - finite loss
 - finite Q/K/V/O gradients
 - finite gate gradient
-- read â†’ update â†’ append
+- read → update → append
 - reset every H-cycle
 - no ACT history carry
 - max queried history length = 6
@@ -457,11 +457,11 @@ Total preferred GPU long runs: **12**.
 
 Priority:
 
-1. Vanilla 0â€“2 + Attention 0â€“2
-2. Gated 0â€“2
-3. Parameter-Matched 0â€“2
+1. Vanilla 0–2 + Attention 0–2
+2. Gated 0–2
+3. Parameter-Matched 0–2
 
-If five seeds are later affordable, add seeds 3â€“4 symmetrically to all primary variants. Do not add extra seeds only to a model whose result is uncertain.
+If five seeds are later affordable, add seeds 3–4 symmetrically to all primary variants. Do not add extra seeds only to a model whose result is uncertain.
 
 ---
 
@@ -496,7 +496,7 @@ Additional diagnostics:
 - VRAM
 - throughput
 
-Never call cell accuracy â€œexact accuracy.â€
+Never call cell accuracy “exact accuracy.”
 
 CPU exact accuracy being zero means the CPU evidence is primarily token-level/mechanistic.
 
@@ -572,7 +572,7 @@ Current classifications:
 
 Maintain two primary result families.
 
-### Table A â€” Reduced CPU regime
+### Table A — Reduced CPU regime
 
 Rows: Vanilla, Gated Uniform History, Low-Rank HistoryAttention, Parameter-Matched No-History.
 
@@ -580,7 +580,7 @@ Columns: Seeds, Cell Accuracy, Exact Accuracy, LM Loss, Delta vs Vanilla.
 
 Use five training seeds.
 
-### Table B â€” GPU scale-transfer
+### Table B — GPU scale-transfer
 
 Rows: Vanilla, Gated Uniform History, Low-Rank HistoryAttention, Parameter-Matched No-History.
 
@@ -594,11 +594,11 @@ Do not causally compare absolute CPU and GPU accuracies. Cross-scale comparison 
 
 ## 23. Paper structure
 
-1. **Introduction** â€” Is the current TRM latent always a sufficient summary? Study explicit latent-history access without promising improvement.
-2. **Related Work** â€” TRM/HRM, recursive reasoning, recurrent memory, hidden-state history, temporal attention, parameter-efficient retrieval. Clarify that history attention operates over recursive time for the same token and does not replace spatial attention.
-3. **Method** â€” Primary within-H-cycle `z_L` Low-Rank HistoryAttention; causality/reset/pre-QKV norm/low-rank QKV/gate/residual; Gated and Parameter-Matched controls; Track A briefly as prior mechanism study.
-4. **Results** â€” Track A mechanism evidence; five-seed reduced CPU Track B; control decomposition; canonical GPU scale transfer; mechanistic diagnostics only when defensible.
-5. **Conclusion / Limitations** â€” reduced CPU regime, CPU exact=0, resource-adapted GPU setup, GPU seed count, different CPU/GPU training regimes, pre-alignment GPU screening, and optimization instability if observed.
+1. **Introduction** — Is the current TRM latent always a sufficient summary? Study explicit latent-history access without promising improvement.
+2. **Related Work** — TRM/HRM, recursive reasoning, recurrent memory, hidden-state history, temporal attention, parameter-efficient retrieval. Clarify that history attention operates over recursive time for the same token and does not replace spatial attention.
+3. **Method** — Primary within-H-cycle `z_L` Low-Rank HistoryAttention; causality/reset/pre-QKV norm/low-rank QKV/gate/residual; Gated and Parameter-Matched controls; Track A briefly as prior mechanism study.
+4. **Results** — Track A mechanism evidence; five-seed reduced CPU Track B; control decomposition; canonical GPU scale transfer; mechanistic diagnostics only when defensible.
+5. **Conclusion / Limitations** — reduced CPU regime, CPU exact=0, resource-adapted GPU setup, GPU seed count, different CPU/GPU training regimes, pre-alignment GPU screening, and optimization instability if observed.
 
 ---
 
@@ -628,8 +628,8 @@ Not yet tested:
 ## 25. Result-dependent final interpretation
 
 - **Attention > Vanilla, Gated, and Parameter-Matched consistently:** evidence for learned selective retrieval beyond access and capacity.
-- **Gated > Vanilla, Attention â‰¤ Gated:** history access may help while learned selectivity adds little or optimization difficulty.
-- **Attention â‰ˆ Parameter-Matched:** capacity may explain much of the effect.
+- **Gated > Vanilla, Attention ≤ Gated:** history access may help while learned selectivity adds little or optimization difficulty.
+- **Attention ≈ Parameter-Matched:** capacity may explain much of the effect.
 - **Vanilla > all history variants:** recurrent latent may already be a sufficient summary in the tested regime.
 - **Large positive/negative effects across seeds:** optimization stability is the central limitation.
 - **CPU unstable/negative but GPU consistently positive across multiple seeds:** effect may be capacity/training-regime dependent.
@@ -642,11 +642,11 @@ No scale-dependence claim from one GPU seed.
 
 ### CPU
 
-Stop after Gated seeds 3â€“4, Parameter-Matched seeds 0â€“4, and the final five-seed four-model aggregation.
+Stop after Gated seeds 3–4, Parameter-Matched seeds 0–4, and the final five-seed four-model aggregation.
 
 ### GPU
 
-Minimum useful canonical scale-transfer evidence: 3 Vanilla + 3 Attention runs. Preferred complete matrix: 3 seeds Ã— 4 canonical models.
+Minimum useful canonical scale-transfer evidence: 3 Vanilla + 3 Attention runs. Preferred complete matrix: 3 seeds × 4 canonical models.
 
 After the canonical matrix and planned mechanistic analyses, stop. No Maze, ARC, full-rank sweeps, history-window sweeps, or architecture search without explicit agreement and Protocol v2.
 

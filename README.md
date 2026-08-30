@@ -1,338 +1,221 @@
-**Update: Due to many automatically generated and irrelevant issues submitted to this repo (that have been deleted now) and our limited capacity to properly maintain this repo, we have to temporaliy archive (make read-only) this and several other repos.**
+# Latent-History Retrieval for Tiny Recursive Models
 
+This repository is a research fork of **Tiny Recursive Models (TRM)** that
+studies whether explicit access to previous recursive latent states improves
+reasoning, and whether learned selective retrieval provides value beyond simple
+history access or extra model capacity.
 
-# Less is More: Recursive Reasoning with Tiny Networks
+The project is built on the upstream TRM implementation from
+Samsung SAIL Montreal and adds CPU-friendly execution, latent-history modules,
+matched controls, reproducibility tooling, and a canonical GPU scale-transfer
+protocol.
 
-## Project development log
+## Research question
 
-### 2026-08-17 - Repository setup and verified CPU foundation
+> **When, why, and under what conditions does explicit latent-history access
+> help Tiny Recursive Models?**
 
-This section records the exact state of the student project so that work can
-resume without reconstructing earlier decisions.
+The project does **not** assume that HistoryAttention must improve TRM. Positive,
+negative, null, and seed-sensitive outcomes are treated as valid scientific
+results.
 
-#### Project direction and hardware decision
+## Method
 
-- The course project definition, the first proposal, and the final concise
-  proposal were reviewed. The current implementation direction is the focused
-  proposal: **selective attention over the latent history of TRM**.
-- Target laptop: Windows 11, Intel Core i7-1355U, 16 GB RAM, Intel Iris Xe,
-  no NVIDIA/CUDA GPU, and a 1 TB NVMe SSD.
-- The upstream repository states that even its smallest full Sudoku experiment
-  uses an L40S GPU with 48 GB memory for roughly 18 hours. Therefore, full
-  paper-scale reproduction is not considered practical on this laptop.
-- Agreed strategy: all development, unit tests, smoke tests, and reduced CPU
-  pilots must run locally. Full multi-model/multi-seed experiments remain an
-  optional cloud-GPU path and must not be silently presented as local results.
+The primary method is **within-H-cycle Low-Rank HistoryAttention** over `z_L`.
 
-#### Git and GitHub setup
+For each H-cycle, the model keeps the complete causal sequence of `z_L` states:
 
-- Fork created at
-  <https://github.com/Iliyabr/trm-latent-history-attention>.
-- Local `origin` points to the fork.
-- Local `upstream` points to
-  <https://github.com/SamsungSAILMontreal/TinyRecursiveModels>.
-- `main` still matches the upstream-derived fork and was intentionally left
-  unchanged.
-- Development branch created: `codex/cpu-foundation`.
-- CPU foundation commit: `268d883 Add verified CPU-only local workflow`.
-- The branch was successfully pushed to
-  `origin/codex/cpu-foundation` and is tracking that remote branch.
-- Stopping point: the Pull Request had **not yet been created or merged**.
-  Resume by opening
-  <https://github.com/Iliyabr/trm-latent-history-attention/pull/new/codex/cpu-foundation>.
+```text
+history = [z0]
 
-#### Environment created and verified
+L-step 1: READ [z0]       -> UPDATE z1 -> APPEND z1
+L-step 2: READ [z0,z1]    -> UPDATE z2 -> APPEND z2
+...
+L-step 6: READ [z0,...z5] -> UPDATE z6 -> APPEND z6
+```
 
-- Conda environment: `trm-cpu`.
-- Python inside the environment: `3.12.13`.
-- PyTorch: `2.7.0+cpu`.
-- CUDA availability: `False`.
-- CPU smoke configuration uses 8 PyTorch threads.
-- The first Conda attempt through `conda-forge` failed because of a temporary
-  DNS resolution problem. Creation succeeded through the official `defaults`
-  channel with `--override-channels`.
-- The original requirements were not installed because they pin a CUDA build
-  and include Triton. The tested local dependencies are recorded in
-  `requirements-cpu.txt`.
-- NumPy was missing from the upstream requirements even though the data loader
-  imports it. `numpy==1.26.4` was added to the CPU requirements after the first
-  smoke attempt exposed the omission.
+The history is reset at the H-cycle boundary and is never carried through ACT.
 
-#### Code and configuration changes
+Canonical retrieval:
 
-- `pretrain.py` was changed from hard-coded CUDA execution to configurable
-  `auto`/CPU/CUDA device handling.
-- Tensor batches, model construction, initial carry, evaluation buffers, and
-  checkpoint loading now use the selected device instead of `.cuda()` or a
-  fixed `map_location="cuda"`.
-- CPU data loading disables pinned memory and supports zero worker processes,
-  which is safer and lighter on Windows.
-- Model compilation can be disabled. It is disabled in the local CPU smoke
-  configuration.
-- PyTorch `AdamW` can be selected for CPU runs, so the optional `adam-atan2`
-  package is not required locally. The original optimizer remains the default
-  for upstream-compatible GPU configurations.
-- W&B runs can be disabled; the local configuration requires no account or
-  login.
-- Distributed CPU execution is explicitly rejected by this entry point instead
-  of falling into the upstream NCCL/CUDA path.
-- Added `config/arch/trm_cpu.yaml`: a deliberately tiny float32 TRM with hidden
-  size 64, one layer, one inner cycle, one outer cycle, four heads, and at most
-  two halting steps.
-- Added `config/cfg_cpu_smoke.yaml`: batch size 1, two epochs, AdamW, no model
-  compilation, no W&B sync, no data-loader workers, and CPU-only execution.
-- Added `scripts/create_tiny_sudoku_dataset.py`: creates a deterministic toy
-  dataset with 8 training puzzles and 4 test puzzles. This dataset validates the
-  pipeline only and must never be used as a research result.
-- Added `.gitignore` rules for generated datasets, checkpoints, logs, W&B data,
-  caches, virtual environments, and large model files.
-- Added `CPU_LOCAL.md` with the exact Windows/Conda setup and execution commands.
-- Added `requirements-cpu.txt`, intentionally excluding CUDA, Triton, and
-  `adam-atan2`.
+```text
+q   = W_Q RMSNorm(z)
+k_i = W_K RMSNorm(h_i)
+v_i = W_V RMSNorm(h_i)
 
-#### Validation completed
+alpha   = softmax((q · k_i) / sqrt(d_head))
+context = sum_i alpha_i v_i
+memory  = W_O(context)
 
-- Python syntax compilation passed for `pretrain.py` and the tiny dataset
-  generator.
-- The deterministic toy dataset was generated successfully under
-  `data/sudoku-tiny/`; `data/` is ignored by Git.
-- A complete CPU smoke run succeeded with:
+g      = sigmoid(gate_logit)
+z_read = RMSNorm(z + g * memory)
+```
 
-  ```powershell
-  conda run -n trm-cpu python pretrain.py --config-name cfg_cpu_smoke
-  ```
+The CPU model uses `D=64`, rank `16`, four temporal heads, and
+`gate_logit_init=-2`.
 
-- Observed result: 16 training steps completed, followed by two evaluation
-  passes. Each evaluation processed all four test puzzles with two inference
-  steps per puzzle batch.
-- A small checkpoint was written under
-  `checkpoints/trm-cpu-smoke/local-smoke/`; checkpoints are ignored by Git.
-- Final runtime line confirmed `Runtime device: cpu`, PyTorch `2.7.0+cpu`, and
-  8 threads. No CUDA path was used.
+## Matched controls
 
-#### Explicitly not completed yet
+| Variant | Purpose |
+|---|---|
+| Vanilla TRM | No explicit latent history |
+| Gated Uniform History | Tests history access without learned temporal selection |
+| Low-Rank HistoryAttention | Tests query-dependent selective retrieval |
+| Parameter-Matched No-History | Tests whether extra capacity explains the effect |
 
-- The Pull Request from `codex/cpu-foundation` to `main` has not been created or
-  merged.
-- The proposed latent-history attention module has not been implemented yet.
-- Unit tests for history attention, causal masking, gradients, caching, and
-  checkpoint compatibility have not been written yet.
-- The official Sudoku-Extreme dataset has not been downloaded for this fork.
-- No real baseline, pilot, ablation, Maze, multi-seed, or statistical experiment
-  has been run. The only run so far is the synthetic smoke test.
+## CPU results
 
-#### Recommended next session
+The canonical CPU study is complete: **4 models × 5 seeds = 20 runs**, with
+eight evaluation checkpoints per run.
 
-1. Create and review the pending Pull Request, then merge it into `main`.
-2. Add a reduced but scientifically meaningful CPU pilot configuration separate
-   from the smoke test.
-3. Add shape/gradient tests around the unchanged TRM baseline.
-4. Implement the low-rank causal `HistoryAttention` module on a new feature
-   branch.
-5. Compare the selective-history model first against original TRM and uniform
-   history averaging before expanding to expensive ablations.
+| Model | Final token accuracy (mean ± SD) | Delta vs Vanilla |
+|---|---:|---:|
+| Vanilla | **45.867 ± 0.858%** | — |
+| Gated Uniform History | 45.747 ± 0.503% | −0.120 pp |
+| HistoryAttention | 45.459 ± 1.520% | −0.407 pp |
+| Parameter-Matched No-History | 45.428 ± 0.655% | −0.438 pp |
 
-To reopen the current local state before the Pull Request is merged:
+The final CPU result does **not** show a robust final-accuracy improvement from
+HistoryAttention. However, the paired learning curves show a reproducible early
+optimization advantage: at step 1250, Attention − Vanilla is `+0.688 pp`,
+positive in `5/5` seeds, with a Holm-adjusted checkpoint-level `p=0.040`.
+
+A separate supporting outer-step `z_H` history study found a reproducible
+`+0.730 pp` Attention gain at recursion depth 8, with a paired 95% CI of
+`[+0.367,+1.110]` pp and `5/5` positive seeds. The effect was not monotonic in
+depth.
+
+Exact-grid accuracy is zero in the reduced CPU regime, so CPU conclusions are
+mechanistic/token-level rather than evidence of improved complete Sudoku
+solving.
+
+## Current status
+
+| Component | Status |
+|---|---|
+| CPU environment and smoke pipeline | Complete |
+| Outer-step latent-history mechanism study | Complete |
+| Canonical within-cycle four-model CPU study | Complete / frozen |
+| CPU statistical analysis and figures | Complete |
+| Unit tests for canonical L-cycle modules | 4 passed |
+| Canonical GPU scale-transfer campaign | In progress |
+| Final paper | CPU sections ready; GPU result section pending |
+
+## Repository guide
+
+```text
+README.md
+RUNBOOK.md
+
+docs/
+  CPU_STUDY_FINAL.md
+  CPU_LCYCLE_FINAL_EVIDENCE_v1.md
+  CPU_LCYCLE_STATISTICAL_ANALYSIS_v1.md
+  TRM_HISTORY_CANONICAL_PROTOCOL_v1.md
+  TRM_HISTORY_DEPLOYMENT_MANIFEST_v1.md
+  data/
+    CPU_LCYCLE_ALL_METRICS_v1.csv
+  figures/
+    cpu_paired_delta_vs_vanilla.png
+    cpu_learning_curves_accuracy.png
+    cpu_final_seed_accuracy.png
+  archive/
+
+models/history/
+  # Supporting outer-step z_H modules
+  attention.py
+  gated.py
+  last_state.py
+  recency.py
+  uniform.py
+
+  # Canonical within-cycle z_L modules
+  lcycle_lowrank_attention.py
+  lcycle_gated.py
+  lcycle_param_matched.py
+
+scripts/
+  run_lcycle_overnight.ps1
+  analyze_cpu_lcycle.py
+  extract_lcycle_gates.py
+
+tests/
+  test_lcycle_lowrank_history.py
+```
+
+## Quick CPU setup
+
+Windows / Conda:
 
 ```powershell
-cd "C:\Users\iliya\OneDrive\Documents\ChatGPT\TRM Project"
+conda create -n trm-cpu -c defaults --override-channels python=3.12 -y
 conda activate trm-cpu
-git switch codex/cpu-foundation
-git status
+python -m pip install --upgrade pip
+python -m pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements-cpu.txt
 ```
 
-This is the codebase for the paper: "Less is More: Recursive Reasoning with Tiny Networks". TRM is a recursive reasoning approach that achieves amazing scores of 45% on ARC-AGI-1 and 8% on ARC-AGI-2 using a tiny 7M parameters neural network.
+For analysis/figure reproduction:
 
-[Paper](https://arxiv.org/abs/2510.04871)
-
-### Motivation
-
-Tiny Recursion Model (TRM) is a recursive reasoning model that achieves amazing scores of 45% on ARC-AGI-1 and 8% on ARC-AGI-2 with a tiny 7M parameters neural network. The idea that one must rely on massive foundational models trained for millions of dollars by some big corporation in order to achieve success on hard tasks is a trap. Currently, there is too much focus on exploiting LLMs rather than devising and expanding new lines of direction. With recursive reasoning, it turns out that “less is more”: you don’t always need to crank up model size in order for a model to reason and solve hard problems. A tiny model pretrained from scratch, recursing on itself and updating its answers over time, can achieve a lot without breaking the bank.
-
-This work came to be after I learned about the recent innovative Hierarchical Reasoning Model (HRM). I was amazed that an approach using small models could do so well on hard tasks like the ARC-AGI competition (reaching 40% accuracy when normally only Large Language Models could compete). But I kept thinking that it is too complicated, relying too much on biological arguments about the human brain, and that this recursive reasoning process could be greatly simplified and improved. Tiny Recursion Model (TRM) simplifies recursive reasoning to its core essence, which ultimately has nothing to do with the human brain, does not require any mathematical (fixed-point) theorem, nor any hierarchy.
-
-### How TRM works
-
-<p align="center">
-  <img src="https://AlexiaJM.github.io/assets/images/TRM_fig.png" alt="TRM"  style="width: 30%;">
-</p>
-
-Tiny Recursion Model (TRM) recursively improves its predicted answer y with a tiny network. It starts with the embedded input question x and initial embedded answer y and latent z. For up to K improvements steps, it tries to improve its answer y. It does so by i) recursively updating n times its latent z given the question x, current answer y, and current latent z (recursive reasoning), and then ii) updating its answer y given the current answer y and current latent z. This recursive process allows the model to progressively improve its answer (potentially addressing any errors from its previous answer) in an extremely parameter-efficient manner while minimizing overfitting.
-
-### Requirements
-
-> **CPU-only Windows users:** use the tested local workflow in
-> [CPU_LOCAL.md](CPU_LOCAL.md). It avoids CUDA, Triton, large batches, and online
-> experiment logging. The commands below are the original GPU workflow.
-
-Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).
-
-- Python 3.10 (or similar)
-- Cuda 12.6.0 (or similar)
-
-```bash
-pip install --upgrade pip wheel setuptools
-pip install --pre --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu126 # install torch based on your cuda version
-pip install -r requirements.txt # install requirements
-pip install --no-cache-dir --no-build-isolation adam-atan2 
-wandb login YOUR-LOGIN # login if you want the logger to sync results to your Weights & Biases (https://wandb.ai/)
+```powershell
+python -m pip install -r requirements-analysis.txt
 ```
 
-### Dataset Preparation
+Run the canonical module tests:
 
-```bash
-# ARC-AGI-1
-python -m dataset.build_arc_dataset \
-  --input-file-prefix kaggle/combined/arc-agi \
-  --output-dir data/arc1concept-aug-1000 \
-  --subsets training evaluation concept \
-  --test-set-name evaluation
-
-# ARC-AGI-2
-python -m dataset.build_arc_dataset \
-  --input-file-prefix kaggle/combined/arc-agi \
-  --output-dir data/arc2concept-aug-1000 \
-  --subsets training2 evaluation2 concept \
-  --test-set-name evaluation2
-
-## Note: You cannot train on both ARC-AGI-1 and ARC-AGI-2 and evaluate them both because ARC-AGI-2 training data contains some ARC-AGI-1 eval data
-
-# Sudoku-Extreme
-python dataset/build_sudoku_dataset.py --output-dir data/sudoku-extreme-1k-aug-1000  --subsample-size 1000 --num-aug 1000  # 1000 examples, 1000 augments
-
-# Maze-Hard
-python dataset/build_maze_dataset.py # 1000 examples, 8 augments
+```powershell
+python -m pytest tests/test_lcycle_lowrank_history.py -q
 ```
 
-## Experiments
+Expected:
 
-### Sudoku-Extreme (assuming 1 L40S GPU):
-
-```bash
-run_name="pretrain_mlp_t_sudoku"
-python pretrain.py \
-arch=trm \
-data_paths="[data/sudoku-extreme-1k-aug-1000]" \
-evaluators="[]" \
-epochs=50000 eval_interval=5000 \
-lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
-arch.mlp_t=True arch.pos_encodings=none \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=6 \
-+run_name=${run_name} ema=True
-
-Expected: Around 87% exact-accuracy (+- 2%)
-
-run_name="pretrain_att_sudoku"
-python pretrain.py \
-arch=trm \
-data_paths="[data/sudoku-extreme-1k-aug-1000]" \
-evaluators="[]" \
-epochs=50000 eval_interval=5000 \
-lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=6 \
-+run_name=${run_name} ema=True
+```text
+4 passed
 ```
 
-Expected: Around 75% exact-accuracy (+- 2%)
+Detailed commands, experiment naming, artifact paths, and reproduction policy
+are documented in [`RUNBOOK.md`](RUNBOOK.md).
 
-*Runtime:* < 20 hours
+## Scientific protocol
 
-### Maze-Hard (assuming 4 L40S GPUs):
+The frozen scientific design is documented in:
 
-```bash
-run_name="pretrain_att_maze30x30"
-torchrun --nproc-per-node 4 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
-arch=trm \
-data_paths="[data/maze-30x30-hard-1k]" \
-evaluators="[]" \
-epochs=50000 eval_interval=5000 \
-lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=4 \
-+run_name=${run_name} ema=True
+```text
+docs/TRM_HISTORY_CANONICAL_PROTOCOL_v1.md
 ```
 
-*Runtime:* < 24 hours
+GPU deployment-specific values are recorded separately in:
 
-Actually, you can run Maze-Hard with 1 L40S GPU by reducing the batch-size with no noticable loss in performance:
-
-```bash
-run_name="pretrain_att_maze30x30_1gpu"
-python pretrain.py \
-arch=trm \
-data_paths="[data/maze-30x30-hard-1k]" \
-evaluators="[]" \
-epochs=50000 eval_interval=5000 \
-lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 global_batch_size=128 \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=4 \
-+run_name=${run_name} ema=True
+```text
+docs/TRM_HISTORY_DEPLOYMENT_MANIFEST_v1.md
 ```
 
-*Runtime:* < 24 hours
+The scientific protocol and hardware deployment manifest are intentionally
+separate so runtime feasibility decisions do not silently alter the research
+question.
 
+## Reproducibility
 
-### ARC-AGI-1 (assuming 4 H-100 GPUs):
+Final CPU analysis data are tracked in:
 
-```bash
-run_name="pretrain_att_arc1concept_4"
-torchrun --nproc-per-node 4 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
-arch=trm \
-data_paths="[data/arc1concept-aug-1000]" \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=4 \
-+run_name=${run_name} ema=True
-
+```text
+docs/data/CPU_LCYCLE_ALL_METRICS_v1.csv
 ```
 
-*Runtime:* ~3 days
+Raw checkpoints, local logs, and large experiment directories are preserved
+locally and are intentionally not committed wholesale.
 
-### ARC-AGI-2 (assuming 4 H-100 GPUs):
+## Attribution
 
-```bash
-run_name="pretrain_att_arc2concept_4"
-torchrun --nproc-per-node 4 --rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 pretrain.py \
-arch=trm \
-data_paths="[data/arc2concept-aug-1000]" \
-arch.L_layers=2 \
-arch.H_cycles=3 arch.L_cycles=4 \
-+run_name=${run_name} ema=True
+This project is based on the upstream **Tiny Recursive Models** repository and
+the paper *Less is More: Recursive Reasoning with Tiny Networks*.
 
-```
+Upstream repository:
 
-*Runtime:* ~3 days
+<https://github.com/SamsungSAILMontreal/TinyRecursiveModels>
 
+Project fork:
 
-## Reference
+<https://github.com/Iliyabr/trm-latent-history-attention>
 
-If you find our work useful, please consider citing:
-
-```bibtex
-@misc{jolicoeurmartineau2025morerecursivereasoningtiny,
-      title={Less is More: Recursive Reasoning with Tiny Networks}, 
-      author={Alexia Jolicoeur-Martineau},
-      year={2025},
-      eprint={2510.04871},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2510.04871}, 
-}
-```
-
-and the Hierarchical Reasoning Model (HRM):
-
-```bibtex
-@misc{wang2025hierarchicalreasoningmodel,
-      title={Hierarchical Reasoning Model}, 
-      author={Guan Wang and Jin Li and Yuhao Sun and Xing Chen and Changling Liu and Yue Wu and Meng Lu and Sen Song and Yasin Abbasi Yadkori},
-      year={2025},
-      eprint={2506.21734},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2506.21734}, 
-}
-```
-
-This code is based on the Hierarchical Reasoning Model [code](https://github.com/sapientinc/HRM) and the Hierarchical Reasoning Model Analysis [code](https://github.com/arcprize/hierarchical-reasoning-model-analysis).
+Please cite the original TRM and HRM work when using the upstream code or ideas.

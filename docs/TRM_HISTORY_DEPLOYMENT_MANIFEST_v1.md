@@ -1,7 +1,7 @@
-﻿# TRM History Deployment Manifest v1
+# TRM History Deployment Manifest v1
 
 **Protocol:** `TRM_HISTORY_CANONICAL_PROTOCOL_v1.md`
-**Status:** PENDING PROFILE â†’ LOCKED before canonical GPU long runs
+**Status:** PENDING PROFILE → LOCKED before canonical GPU long runs
 
 Fill only from measured GPU runtime evidence. Accuracy must not be used to choose deployment values.
 

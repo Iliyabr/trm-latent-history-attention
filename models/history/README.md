@@ -1,144 +1,165 @@
-﻿# Latent History Module Interface
+# Latent-History Modules
 
-This directory defines the shared interface for all TRM latent-history aggregation methods.
+This directory contains **two separate latent-history research tracks**.
+They must not be mixed in experiments or paper claims.
 
-## Scientific purpose
+## Track A — outer-step `z_H` history
 
-The TRM core records detached latent states from previous outer reasoning steps.
+Supporting mechanism study.
 
-For outer step t, the valid history contains only:
+Relevant modules include:
 
-z_1, z_2, ..., z_(t-1)
+```text
+base.py
+factory.py
+none.py
+uniform.py
+recency.py
+last_state.py
+gated.py
+attention.py
+```
 
-The current state z_t is never inserted into the history before aggregation.
+Track A aggregates previous **outer/ACT-step** latent states. Historical states
+are detached before storage to preserve the truncated-gradient semantics of the
+outer recurrent process. The current state is not inserted into history before
+retrieval, and history is reset between puzzles.
 
-This preserves causal history semantics.
+Track A produced a reproducible positive result at reduced recursion depth 8,
+but did not show a monotonic benefit with depth.
 
-## Tensor contract
+## Track B — within-H-cycle `z_L` history
 
-Every history aggregator receives:
+This is the **primary canonical proposal track**.
 
-- current_z: [B, L, D]
-- history_z: [B, K, L, D]
-- history_lengths: [B]
+Relevant modules:
 
-where:
+```text
+lcycle_lowrank_attention.py
+lcycle_gated.py
+lcycle_param_matched.py
+```
 
-- B = batch size
-- K = maximum outer reasoning steps
-- L = sequence length
-- D = hidden size
+Track-B history is local to each H-cycle.
 
-For sample b, only the entries from index 0 up to history_lengths[b] are valid historical states.
+Canonical semantics:
 
-The aggregator must return:
+```text
+history = [z_L at H-cycle entry]
 
-- shape: [B, L, D]
-- dtype: same as current_z
+for each L-step:
+    READ from history
+    UPDATE z_L
+    APPEND new z_L
+```
 
-## Gradient policy
+Frozen invariants:
 
-Historical states are intentionally detached before storage.
+```text
+history location = within-H-cycle z_L
+order = READ -> UPDATE -> APPEND
+history reset = every H-cycle
+history carried through ACT = no
+history leakage between puzzles = no
+current updated state visible to same-step retrieval = no
+```
 
-Therefore history modules receive detached previous outer-step states.
+For `L_cycles=6`, the queried causal history lengths are `1,2,3,4,5,6`.
 
-This preserves the original TRM truncated-gradient behavior and prevents HistoryAttention from silently introducing backpropagation through the full outer reasoning trajectory.
+## Canonical Low-Rank HistoryAttention
 
-Changing this policy must be treated as a separate ablation.
+```text
+q   = W_Q RMSNorm(z)
+k_i = W_K RMSNorm(h_i)
+v_i = W_V RMSNorm(h_i)
 
-## Reset policy
+alpha   = softmax((q · k_i) / sqrt(d_head))
+context = sum_i alpha_i v_i
+memory  = W_O(context)
 
-When a batch slot is reused for a new puzzle:
+g      = sigmoid(gate_logit)
+z_read = RMSNorm(z + g * memory)
+```
 
-- its history buffer is cleared
-- its history length becomes zero before the new state is computed
+Normalization is pre-QKV in the D-dimensional latent space.
 
-This prevents history leakage across puzzles.
+CPU:
 
-## Integration contract
+```text
+D = 64
+rank = 16
+temporal_heads = 4
+gate_logit_init = -2
+added parameters = 4,097
+```
 
-History aggregation is called before the newly computed current state is appended to the history.
+Canonical GPU:
 
-Conceptually:
+```text
+D = 256
+rank = 64
+temporal_heads = 4
+gate_logit_init = -2
+added parameters = 65,537
+```
 
-1. Compute current z_H
-2. Aggregate using strictly previous history
-3. Produce updated z_H
-4. Detach updated z_H
-5. Append it to history
-6. Produce and carry outputs
+## Gated Uniform History
 
-## Baseline implementation
+`lcycle_gated.py` receives the same causal within-cycle history as
+HistoryAttention but removes learned temporal selection. It answers whether
+history access helps without query-dependent retrieval.
 
-NoHistoryAggregator is the identity control.
+## Parameter-Matched No-History
 
-Its forward method simply returns current_z.
+`lcycle_param_matched.py` receives **no history tensor**. It uses an added
+current-state low-rank branch matched to the parameter overhead of
+HistoryAttention. It controls for increased capacity.
 
-It:
+## Integration
 
-- ignores history
-- adds zero parameters
-- introduces no arithmetic
-- preserves bitwise-equivalent vanilla TRM logits
+The Track-B modules are integrated in:
 
-This behavior is covered by regression tests.
+```text
+models/recursive_reasoning/trm.py
+```
 
-## Adding a new aggregator
+Configuration fields:
 
-Implement a subclass of HistoryAggregator in a new module.
+```text
+lcycle_history_enabled
+lcycle_history_method
+lcycle_history_rank
+lcycle_history_heads
+lcycle_history_gate_init
+lcycle_history_pre_norm
+```
 
-The forward interface must accept:
+Supported canonical method names:
 
-current_z
-history_z
-history_lengths
+```text
+attention
+gated
+parameter_matched
+param_matched
+```
 
-and return an updated latent tensor with shape [B, L, D].
+## Tests
 
-Then register the implementation in:
+Run:
 
-models/history/factory.py
+```powershell
+python -m pytest tests/test_lcycle_lowrank_history.py -q
+```
 
-Do not modify the TRM recursion logic unless the shared interface is insufficient.
+Frozen observed result:
 
-## Team ownership
+```text
+4 passed
+```
 
-### HistoryAttention branch
+## Scientific rule
 
-The HistoryAttention implementation should preferably modify only:
+Track A is supporting mechanistic evidence. Track B is the primary contribution.
 
-- models/history/attention.py
-- models/history/factory.py
-- tests/test_history_attention.py
-
-Avoid modifying:
-
-- models/recursive_reasoning/trm.py
-- pretrain.py
-- dataset generation
-- Phase-1 baseline configurations
-
-If the current interface is insufficient, coordinate the interface change before modifying the TRM core.
-
-### Non-attention baselines
-
-Alternative history methods such as:
-
-- uniform mean history
-- recency-weighted history
-- gated history
-
-should implement the same interface.
-
-This ensures all methods are compared through exactly the same TRM integration path.
-
-## Current validated invariants
-
-The following tests already pass:
-
-- history recording does not change vanilla logits
-- stored history is detached
-- causal history length is correct
-- reset isolation prevents cross-puzzle leakage
-- NoHistoryAggregator adds zero parameters
-- Phase-1 baseline regression still passes
+Do not average the two tracks, relabel one as a replication of the other, or
+use an old outer-step history module as a canonical within-cycle control.

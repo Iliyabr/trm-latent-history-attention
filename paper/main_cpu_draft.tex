@@ -1,0 +1,148 @@
+% CPU-complete paper body draft.
+% GPU placeholders are intentionally explicit and should only be replaced
+% after the canonical GPU campaign is frozen.
+
+\section{Introduction}
+Tiny Recursive Models (TRMs) obtain substantial reasoning capability by
+repeatedly refining a compact latent state rather than scaling parameter count
+\cite{trm}. This compression raises a natural question: is the current
+recursive latent always a sufficient summary of the reasoning trajectory, or
+can explicit access to previous latent states improve the recursive process?
+We study latent-history retrieval in TRM without assuming that such memory must
+be beneficial. Our primary method introduces low-rank temporal attention over
+the causal sequence of within-cycle latent states, while preserving the
+original spatial attention mechanism.
+
+Our contribution is threefold. First, a supporting outer-state study shows
+that explicit latent-history retrieval can help in a specific recursive
+regime, with a reproducible gain at intermediate recursion depth. Second, we
+introduce a proposal-faithful within-cycle Low-Rank HistoryAttention mechanism
+and two matched controls that separate history access, learned selectivity, and
+additional capacity. Third, a five-seed reduced-compute study shows that the
+within-cycle mechanism changes optimization dynamics but does not yield a
+robust final accuracy gain at small scale. We therefore evaluate whether this
+behavior transfers to a larger GPU-trained regime.
+
+\section{Related Work}
+TRM simplifies recursive reasoning into repeated refinement with a small
+shared network \cite{trm}, building on the broader line of hierarchical and
+recurrent reasoning models such as HRM \cite{hrm}. Our work is related to
+recurrent memory and temporal attention, but differs from standard
+sequence-position attention: retrieval is performed across \emph{recursive
+time} for the same Sudoku cell/token position. The method therefore augments,
+rather than replaces, TRM's spatial attention. \emph{[Add 2--4 verified recent
+references from the literature survey here.]}
+
+\section{Method}
+\paragraph{Within-cycle latent history.}
+For each H-cycle, we initialize the temporal history with the entering latent
+$z_L^0$. At L-step $t$, the current latent reads only from
+$\{z_L^0,\ldots,z_L^{t-1}\}$, the TRM block produces $z_L^t$, and the new state
+is appended afterwards. The history is reset at every H-cycle boundary and is
+not carried through ACT.
+
+\paragraph{Low-Rank HistoryAttention.}
+For current latent $z$ and historical states $h_i$, we compute
+\begin{align}
+q &= W_Q\,\mathrm{RMSNorm}(z), &
+k_i &= W_K\,\mathrm{RMSNorm}(h_i),\\
+v_i &= W_V\,\mathrm{RMSNorm}(h_i), &
+\alpha_i &= \mathrm{softmax}_i(q^\top k_i/\sqrt{d_h}),
+\end{align}
+followed by
+\begin{equation}
+m=W_O\sum_i\alpha_i v_i,\qquad
+z_{\mathrm{read}}=\mathrm{RMSNorm}\!\left(z+\sigma(g)m\right).
+\end{equation}
+The Q/K/V/O maps are low rank with $r/D=1/4$. The scalar gate is initialized
+with $g=-2$.
+
+\paragraph{Controls.}
+We compare four matched variants: Vanilla TRM; Gated Uniform History, which
+receives the same causal history but averages it without learned temporal
+selection; Low-Rank HistoryAttention; and Parameter-Matched No-History, which
+receives no historical states but adds an equally sized low-rank current-state
+transform. These comparisons isolate history access, selective retrieval, and
+capacity.
+
+\section{Results and Contributions}
+\paragraph{Supporting outer-history study.}
+In a reduced CPU study over outer recursive states, the strongest
+HistoryAttention effect occurred at depth 8: token accuracy increased from
+$42.659\%$ to $43.389\%$ ($+0.730$ pp), with a paired 95\% CI of
+$[+0.367,+1.110]$ pp and positive effects in all five seeds. The effect was
+small at depths 2 and 4 and disappeared again at depth 16. The depth-8 minus
+depth-4 interaction CI included zero, so these results support a
+regime-specific benefit rather than monotonic improvement with recursion
+depth.
+
+\paragraph{Canonical within-cycle CPU study.}
+We then evaluated the proposal-faithful method using
+$D=64$, H3/L6/L2, rank 16, four temporal heads, and five matched training seeds.
+Table~\ref{tab:cpu} reports the frozen step-10,000 results.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Reduced CPU results (mean $\pm$ SD over five seeds). Exact-grid
+accuracy was zero for all variants.}
+\label{tab:cpu}
+\begin{tabular}{lccr}
+\toprule
+Model & Cell Acc. (\%) & LM Loss & $\Delta$ vs. V \\
+\midrule
+Vanilla & \textbf{45.867$\pm$0.858} & \textbf{1.3329} & --\\
+Gated & 45.747$\pm$0.503 & 1.3398 & -0.120\\
+HistoryAttn. & 45.459$\pm$1.520 & 1.3443 & -0.407\\
+Param.-Matched & 45.428$\pm$0.655 & 1.3466 & -0.438\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+None of the final paired 95\% intervals excluded zero; for
+HistoryAttention--Vanilla the mean difference was $-0.407$ pp with
+95\% CI $[-2.447,+1.632]$. Thus, the reduced CPU study does not support a
+final-accuracy improvement from within-cycle selective retrieval.
+
+\paragraph{Optimization dynamics.}
+The final result hides a reproducible early effect. At step 1,250,
+HistoryAttention exceeded its paired Vanilla runs by $+0.688$ pp, positive in
+5/5 seeds, with 95\% CI $[+0.347,+1.028]$ and a Holm-adjusted
+checkpoint-level $p=0.040$. At step 2,500 the mean advantage was $+3.099$ pp
+and again positive in 5/5 seeds, but it did not survive correction across the
+eight checkpoints. The advantage subsequently decayed and became slightly
+negative by the final checkpoint. This indicates an optimization-dynamics
+effect rather than a persistent improvement.
+
+\paragraph{Mechanistic gate evidence.}
+The added branches were not inert. Starting from
+$\sigma(-2)=0.119$, the final learned gates were
+$0.139\pm0.011$ for HistoryAttention,
+$0.228\pm0.027$ for Gated Uniform History, and
+$0.136\pm0.006$ for the parameter-matched control. Gated Uniform History
+therefore learned to rely substantially more on its auxiliary branch without
+improving final accuracy, ruling out the simple explanation that null final
+effects arise only because the added path remains closed.
+
+\paragraph{GPU scale transfer.}
+\textbf{[GPU PLACEHOLDER.]}
+Insert the frozen D256/H3/L6/L2 canonical results here only after the matched
+GPU campaign is complete. Report every seed, mean$\pm$SD, exact-grid accuracy,
+cell accuracy, LM loss, added parameters, runtime/VRAM, and paired deltas.
+Interpret the result using the pre-registered four-way comparison rather than
+absolute CPU--GPU accuracy.
+
+\section{Conclusion and Limitations}
+Explicit latent-history access changes TRM behavior, but its utility is
+regime-dependent. A supporting outer-history experiment shows a reproducible
+benefit at intermediate recursion depth, while proposal-faithful within-cycle
+HistoryAttention yields a clear early optimization advantage that is not
+sustained at the final CPU checkpoint. The matched controls further show that
+history access, learned selection, and additional capacity do not individually
+produce a robust small-scale final improvement.
+
+The CPU experiments use a deliberately reduced configuration and achieve zero
+exact-grid accuracy, so they provide token-level and mechanistic evidence
+rather than improved complete Sudoku solving. The final conclusion about scale
+transfer is therefore reserved for the canonical GPU experiment.
+\textbf{[Replace the final two sentences after GPU results are frozen.]}

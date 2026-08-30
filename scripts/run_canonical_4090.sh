@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-shot canonical GPU campaign (protocol v1) — RTX 4090 server.
 #
-# Hardware: RTX 4090 24 GB, bfloat16, CPU cap 16 threads / 4 loader workers.
+# Hardware: RTX 4090 24 GB, bfloat16, CPU cap 16 threads / 1 loader workers.
 # Seed 1 only. The other live GPU box uses scripts/run_canonical_server.sh
 # (seed 0, float32). Do not average the two machines as one matched family
 # (protocol §22: one GPU/dtype regime per paired comparison).
@@ -30,10 +30,10 @@ VARIANTS=(B0 P1 Gated B3)
 OUTPUT_ROOT=outputs/study-4090
 EVAL_OUT=results/canonical-gpu-4090
 CPU_THREADS=16
-DATALOADER_WORKERS=4
+DATALOADER_WORKERS=1
 
-# Host cap: 16 cores (user limit 15–20). OMP=2 so four loader workers cannot
-# explode BLAS threads. taskset is applied at launch when it exists.
+# Host cap: 16 cores (user limit 15–20). OMP=2 limits BLAS threads.
+# Sudoku dataset rejects multithreaded loading (puzzle_dataset.py); workers must be 1.
 export OMP_NUM_THREADS=2
 export MKL_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2

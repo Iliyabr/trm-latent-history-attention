@@ -1,0 +1,30 @@
+{
+  "variant": "Gated",
+  "seed": 2,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.018,
+    "cell_accuracy": 0.6648518518518518,
+    "incorrect_cells": 27.147,
+    "row_violations": 6.759,
+    "column_violations": 6.886,
+    "box_violations": 7.168
+  },
+  "wall_time_seconds": 25.464225077070296,
+  "inference_latency_seconds": {
+    "mean_batch": 0.5215036581794266,
+    "p50_batch": 0.5190280338283628
+  },
+  "throughput_examples_per_second": 59.922877835783545,
+  "parameters": {
+    "total": 1710083,
+    "trainable": 1710083
+  },
+  "peak_vram_bytes": 112258048,
+  "checkpoint": "/home/gholami/trm-latent-history-attention/outputs/study-4090/canonical/Gated-seed2/step_28800.pt",
+  "checkpoint_load": {
+    "matched_keys": 16,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

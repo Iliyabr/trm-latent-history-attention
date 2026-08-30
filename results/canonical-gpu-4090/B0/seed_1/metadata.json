@@ -1,0 +1,30 @@
+{
+  "variant": "B0",
+  "seed": 1,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.012,
+    "cell_accuracy": 0.6393580246913587,
+    "incorrect_cells": 29.212,
+    "row_violations": 7.59,
+    "column_violations": 8.099,
+    "box_violations": 7.984
+  },
+  "wall_time_seconds": 23.14536742400378,
+  "inference_latency_seconds": {
+    "mean_batch": 0.4664973671315238,
+    "p50_batch": 0.4359489481430501
+  },
+  "throughput_examples_per_second": 66.988588150358,
+  "parameters": {
+    "total": 1710082,
+    "trainable": 1710082
+  },
+  "peak_vram_bytes": 97803776,
+  "checkpoint": "/home/gholami/trm-latent-history-attention/outputs/study-4090/canonical/B0-seed1/step_28800.pt",
+  "checkpoint_load": {
+    "matched_keys": 15,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

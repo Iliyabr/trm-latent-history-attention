@@ -1,0 +1,30 @@
+{
+  "variant": "B0",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.025,
+    "cell_accuracy": 0.6789382716049382,
+    "incorrect_cells": 26.006,
+    "row_violations": 7.331,
+    "column_violations": 7.294,
+    "box_violations": 7.48
+  },
+  "wall_time_seconds": 57.64701814799628,
+  "inference_latency_seconds": {
+    "mean_batch": 0.915305209062808,
+    "p50_batch": 0.9111353265034268
+  },
+  "throughput_examples_per_second": 34.14161712462803,
+  "parameters": {
+    "total": 1710082,
+    "trainable": 1710082
+  },
+  "peak_vram_bytes": 121707520,
+  "checkpoint": "/home/mahyar/trm-latent-history-attention/outputs/study-8h/canonical_8h/B0-seed0/best_dev.pt",
+  "checkpoint_load": {
+    "matched_keys": 15,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

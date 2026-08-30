@@ -1,0 +1,30 @@
+{
+  "variant": "Gated",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.016,
+    "cell_accuracy": 0.6426296296296297,
+    "incorrect_cells": 28.947,
+    "row_violations": 8.01,
+    "column_violations": 8.181,
+    "box_violations": 8.251
+  },
+  "wall_time_seconds": 62.35490075200505,
+  "inference_latency_seconds": {
+    "mean_batch": 1.067275192875968,
+    "p50_batch": 1.0672488775016973
+  },
+  "throughput_examples_per_second": 29.280170858081284,
+  "parameters": {
+    "total": 1710083,
+    "trainable": 1710083
+  },
+  "peak_vram_bytes": 137077248,
+  "checkpoint": "/home/mahyar/trm-latent-history-attention/outputs/study-8h/canonical_8h/Gated-seed0/best_dev.pt",
+  "checkpoint_load": {
+    "matched_keys": 16,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

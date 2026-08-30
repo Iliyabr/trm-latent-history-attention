@@ -51,3 +51,4 @@ results/history-multiseed/*
 
 # Canonical raw L-cycle run outputs are preserved locally
 results/lcycle-history/
+results/lcycle-history-mechanistic/

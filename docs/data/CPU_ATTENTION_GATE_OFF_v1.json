@@ -1,0 +1,284 @@
+{
+  "analysis": "POST-HOC INFERENCE-ONLY MECHANISTIC ABLATION",
+  "scientific_status": "EXPLORATORY",
+  "intervention": "Set trained HistoryAttention scalar gate_logit to -100 in memory during evaluation only.",
+  "training_performed": false,
+  "checkpoint_modified_on_disk": false,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "results": [
+    {
+      "seed": 0,
+      "run_name": "proposal-h3l6-l2-attention-40ep-seed0",
+      "checkpoint": "checkpoints\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed0\\step_10000",
+      "stored_metrics_file": "results\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed0\\metrics_step_10000.json",
+      "normal_reproduction_max_abs_diff": 0.0,
+      "gate_name": "model.inner.lcycle_history_attention.gate_logit",
+      "learned_gate_logit": -1.6863903999328613,
+      "learned_gate": 0.15625113248825073,
+      "gate_off_logit": -100.0,
+      "gate_off_gate": 0.0,
+      "normal_metrics": {
+        "all": {
+          "accuracy": 0.4672839343547821,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.3239617347717285,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_metrics": {
+        "all": {
+          "accuracy": 0.43975308537483215,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.5193068981170654,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_minus_normal": {
+        "all/accuracy": -0.02753084897994995,
+        "all/exact_accuracy": 0.0,
+        "all/lm_loss": 0.19534516334533691,
+        "all/q_halt_accuracy": 0.0,
+        "all/q_halt_loss": 0.0,
+        "all/steps": 0.0
+      }
+    },
+    {
+      "seed": 1,
+      "run_name": "proposal-h3l6-l2-attention-40ep-seed1",
+      "checkpoint": "checkpoints\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed1\\step_10000",
+      "stored_metrics_file": "results\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed1\\metrics_step_10000.json",
+      "normal_reproduction_max_abs_diff": 0.0,
+      "gate_name": "model.inner.lcycle_history_attention.gate_logit",
+      "learned_gate_logit": -1.9104708433151245,
+      "learned_gate": 0.12892796099185944,
+      "gate_off_logit": -100.0,
+      "gate_off_gate": 0.0,
+      "normal_metrics": {
+        "all": {
+          "accuracy": 0.45240744948387146,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.3535841703414917,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_metrics": {
+        "all": {
+          "accuracy": 0.4520370364189148,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.3529571294784546,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_minus_normal": {
+        "all/accuracy": -0.00037041306495666504,
+        "all/exact_accuracy": 0.0,
+        "all/lm_loss": -0.0006270408630371094,
+        "all/q_halt_accuracy": 0.0,
+        "all/q_halt_loss": 0.0,
+        "all/steps": 0.0
+      }
+    },
+    {
+      "seed": 2,
+      "run_name": "proposal-h3l6-l2-attention-40ep-seed2",
+      "checkpoint": "checkpoints\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed2\\step_10000",
+      "stored_metrics_file": "results\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed2\\metrics_step_10000.json",
+      "normal_reproduction_max_abs_diff": 0.0,
+      "gate_name": "model.inner.lcycle_history_attention.gate_logit",
+      "learned_gate_logit": -1.7816834449768066,
+      "learned_gate": 0.14409539103507996,
+      "gate_off_logit": -100.0,
+      "gate_off_gate": 0.0,
+      "normal_metrics": {
+        "all": {
+          "accuracy": 0.4530864655971527,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.362693428993225,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_metrics": {
+        "all": {
+          "accuracy": 0.45320987701416016,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.364402174949646,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_minus_normal": {
+        "all/accuracy": 0.0001234114170074463,
+        "all/exact_accuracy": 0.0,
+        "all/lm_loss": 0.0017087459564208984,
+        "all/q_halt_accuracy": 0.0,
+        "all/q_halt_loss": 0.0,
+        "all/steps": 0.0
+      }
+    },
+    {
+      "seed": 3,
+      "run_name": "proposal-h3l6-l2-attention-40ep-seed3",
+      "checkpoint": "checkpoints\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed3\\step_10000",
+      "stored_metrics_file": "results\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed3\\metrics_step_10000.json",
+      "normal_reproduction_max_abs_diff": 0.0,
+      "gate_name": "model.inner.lcycle_history_attention.gate_logit",
+      "learned_gate_logit": -1.856151819229126,
+      "learned_gate": 0.13515222072601318,
+      "gate_off_logit": -100.0,
+      "gate_off_gate": 0.0,
+      "normal_metrics": {
+        "all": {
+          "accuracy": 0.4311728775501251,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.3820815086364746,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_metrics": {
+        "all": {
+          "accuracy": 0.42500007152557373,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.4003257751464844,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_minus_normal": {
+        "all/accuracy": -0.006172806024551392,
+        "all/exact_accuracy": 0.0,
+        "all/lm_loss": 0.018244266510009766,
+        "all/q_halt_accuracy": 0.0,
+        "all/q_halt_loss": 0.0,
+        "all/steps": 0.0
+      }
+    },
+    {
+      "seed": 4,
+      "run_name": "proposal-h3l6-l2-attention-40ep-seed4",
+      "checkpoint": "checkpoints\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed4\\step_10000",
+      "stored_metrics_file": "results\\lcycle-history\\proposal-h3l6-l2-attention-40ep-seed4\\metrics_step_10000.json",
+      "normal_reproduction_max_abs_diff": 0.0,
+      "gate_name": "model.inner.lcycle_history_attention.gate_logit",
+      "learned_gate_logit": -1.8955425024032593,
+      "learned_gate": 0.1306138038635254,
+      "gate_off_logit": -100.0,
+      "gate_off_gate": 0.0,
+      "normal_metrics": {
+        "all": {
+          "accuracy": 0.4690123498439789,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.2990407943725586,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_metrics": {
+        "all": {
+          "accuracy": 0.4687654972076416,
+          "exact_accuracy": 0.0,
+          "lm_loss": 1.3019516468048096,
+          "q_halt_accuracy": 1.0,
+          "q_halt_loss": 0.0,
+          "steps": 4.0
+        }
+      },
+      "gate_off_minus_normal": {
+        "all/accuracy": -0.0002468526363372803,
+        "all/exact_accuracy": 0.0,
+        "all/lm_loss": 0.0029108524322509766,
+        "all/q_halt_accuracy": 0.0,
+        "all/q_halt_loss": 0.0,
+        "all/steps": 0.0
+      }
+    }
+  ],
+  "aggregate_gate_off_minus_normal": {
+    "all/accuracy": {
+      "mean_delta": -0.0068395018577575685,
+      "sample_sd": 0.011857177403400105,
+      "per_seed_delta": [
+        -0.02753084897994995,
+        -0.00037041306495666504,
+        0.0001234114170074463,
+        -0.006172806024551392,
+        -0.0002468526363372803
+      ]
+    },
+    "all/exact_accuracy": {
+      "mean_delta": 0.0,
+      "sample_sd": 0.0,
+      "per_seed_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "all/lm_loss": {
+      "mean_delta": 0.04351639747619629,
+      "sample_sd": 0.0851997475219894,
+      "per_seed_delta": [
+        0.19534516334533691,
+        -0.0006270408630371094,
+        0.0017087459564208984,
+        0.018244266510009766,
+        0.0029108524322509766
+      ]
+    },
+    "all/q_halt_accuracy": {
+      "mean_delta": 0.0,
+      "sample_sd": 0.0,
+      "per_seed_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "all/q_halt_loss": {
+      "mean_delta": 0.0,
+      "sample_sd": 0.0,
+      "per_seed_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "all/steps": {
+      "mean_delta": 0.0,
+      "sample_sd": 0.0,
+      "per_seed_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  }
+}

@@ -210,6 +210,26 @@ yet did not improve final token accuracy over Vanilla.
 Because there are only five seeds, correlations between final gate magnitude
 and final accuracy are treated as exploratory and are not primary paper claims.
 
+
+### Post-hoc inference-only gate-off ablation
+
+As an exploratory mechanistic check, the learned scalar gate of each final
+HistoryAttention checkpoint was suppressed only at inference time
+(gate_logit = -100) without modifying checkpoints or performing any
+additional training.
+
+Across the five Attention seeds, gate-off minus normal token accuracy was
+-0.684 pp on average (sample SD 1.186 pp), with negative deltas in 4/5
+seeds. The paired 95% t interval was [-2.156,+0.788] pp (p=0.267).
+Mean LM-loss increased by +0.0435.
+
+The effect was heterogeneous and largely driven by seed 0
+(-2.753 pp), while several seeds were near zero. Therefore this is
+suggestive, not conclusive, evidence that the trained Attention models make
+functional use of the history branch. It does not establish a robust benefit
+of history over Vanilla.
+
+
 ---
 
 ## 9. Final CPU interpretation
@@ -229,6 +249,9 @@ The combined CPU evidence supports a more specific conclusion:
    selectivity, nor extra capacity alone yields a robust final CPU improvement.
 5. Learned gates move away from initialization, so the negative/null final
    result is not explained by a completely inactive auxiliary branch.
+6. A post-hoc inference-only gate-off intervention is directionally
+   consistent with functional use of the history branch, but the effect is
+   heterogeneous and statistically inconclusive.
 
 Paper-ready sentence:
 
@@ -250,6 +273,9 @@ Paper-ready sentence:
 - The CPU regime is deliberately resource-reduced and should not be compared
   causally to larger GPU absolute accuracy.
 - Post-hoc trajectory summaries must be labeled exploratory.
+- The inference-only gate-off analysis is post-hoc and exploratory; its
+  five-seed effect is heterogeneous and must not be presented as a primary
+  confirmation of history benefit.
 - The canonical GPU scale-transfer experiment is required to test whether the
   Track-B behavior changes with scale/training regime.
 
@@ -267,6 +293,12 @@ docs/figures/cpu_paired_delta_vs_vanilla.png
 docs/figures/cpu_learning_curves_accuracy.png
 docs/figures/cpu_final_seed_accuracy.png
 ```
+
+
+Post-hoc inference-only mechanistic evidence:
+
+- docs/data/CPU_ATTENTION_GATE_OFF_v1.json
+- scripts/eval_attention_gate_off.py
 
 Track-A evidence:
 
@@ -297,7 +329,8 @@ authoritative summary.
 
 CPU **training** under protocol v1 is closed.
 
-Permitted remaining CPU work is analysis of existing artifacts, figure
-generation, reproducibility checks, documentation, or clearly labeled
-post-hoc inference-only mechanistic ablations. No new training variant should
-enter the canonical CPU result family.
+The CPU evidence package is now frozen. No additional CPU training variants
+or post-hoc ablations should be added under protocol v1 unless a genuine
+implementation or analysis bug is discovered. Remaining CPU-side work is
+limited to documentation, reproducibility checks, and paper/figure generation
+from the frozen artifacts.

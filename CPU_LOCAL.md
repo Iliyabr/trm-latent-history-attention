@@ -43,5 +43,6 @@ Expected behavior:
 
 The upstream Sudoku experiment uses a much larger model, batch, augmentation
 count, and training schedule. The smoke result is not an accuracy baseline and
-must never be included as evidence in the final report. CPU pilot configs will
-be added separately after the baseline pipeline is verified.
+must never be included as evidence in the final report. The completed canonical
+CPU study is documented in docs/CPU_STUDY_FINAL.md; reproduction commands are
+maintained in RUNBOOK.md.

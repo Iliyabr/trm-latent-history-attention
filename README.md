@@ -80,6 +80,13 @@ HistoryAttention. However, the paired learning curves show a reproducible early
 optimization advantage: at step 1250, Attention − Vanilla is `+0.688 pp`,
 positive in `5/5` seeds, with a Holm-adjusted checkpoint-level `p=0.040`.
 
+
+A post-hoc inference-only intervention additionally suppressed the learned
+HistoryAttention gate in the five frozen final checkpoints. Gate-off reduced
+token accuracy by 0.684 pp on average (4/5 seeds negative; 95% CI
+[-2.156,+0.788], p=0.267). The effect was heterogeneous and is treated as
+exploratory mechanistic evidence, not as proof of a robust history benefit.
+
 A separate supporting outer-step `z_H` history study found a reproducible
 `+0.730 pp` Attention gain at recursion depth 8, with a paired 95% CI of
 `[+0.367,+1.110]` pp and `5/5` positive seeds. The effect was not monotonic in
@@ -97,6 +104,7 @@ solving.
 | Outer-step latent-history mechanism study | Complete |
 | Canonical within-cycle four-model CPU study | Complete / frozen |
 | CPU statistical analysis and figures | Complete |
+| Post-hoc inference-only gate ablation | Complete / exploratory |
 | Unit tests for canonical L-cycle modules | 4 passed |
 | Canonical GPU scale-transfer campaign | In progress |
 | Final paper | CPU sections ready; GPU result section pending |

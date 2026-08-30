@@ -117,12 +117,14 @@ RUNBOOK.md
 
 docs/
   CPU_STUDY_FINAL.md
+  CPU_HISTORY_FINAL_SUMMARY.md
   CPU_LCYCLE_FINAL_EVIDENCE_v1.md
   CPU_LCYCLE_STATISTICAL_ANALYSIS_v1.md
   TRM_HISTORY_CANONICAL_PROTOCOL_v1.md
   TRM_HISTORY_DEPLOYMENT_MANIFEST_v1.md
   data/
     CPU_LCYCLE_ALL_METRICS_v1.csv
+    CPU_ATTENTION_GATE_OFF_v1.json
   figures/
     cpu_paired_delta_vs_vanilla.png
     cpu_learning_curves_accuracy.png
@@ -146,6 +148,7 @@ scripts/
   run_lcycle_overnight.ps1
   analyze_cpu_lcycle.py
   extract_lcycle_gates.py
+  eval_attention_gate_off.py
 
 tests/
   test_lcycle_lowrank_history.py
@@ -209,6 +212,10 @@ Final CPU analysis data are tracked in:
 ```text
 docs/data/CPU_LCYCLE_ALL_METRICS_v1.csv
 ```
+
+The post-hoc inference-only gate-off evidence is tracked in
+docs/data/CPU_ATTENTION_GATE_OFF_v1.json and can be reproduced with
+scripts/eval_attention_gate_off.py.
 
 Raw checkpoints, local logs, and large experiment directories are preserved
 locally and are intentionally not committed wholesale.

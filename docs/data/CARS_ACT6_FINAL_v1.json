@@ -780,8 +780,8 @@
         "variant": "B0",
         "seed": 0,
         "examples": 1000,
-        "wall_time_seconds": 19.90028196599451,
-        "postprocess_seconds": 0.025790246145334095,
+        "wall_time_seconds": 19.636990275990684,
+        "postprocess_seconds": 0.024515738419722766,
         "additional_forward_passes": 0,
         "act_steps_captured": 6,
         "peak_vram_bytes": 121091584,
@@ -797,8 +797,8 @@
         "variant": "B0",
         "seed": 1,
         "examples": 1000,
-        "wall_time_seconds": 25.045954752000398,
-        "postprocess_seconds": 0.023978598474059254,
+        "wall_time_seconds": 24.80557649700495,
+        "postprocess_seconds": 0.023727913823677227,
         "additional_forward_passes": 0,
         "act_steps_captured": 6,
         "peak_vram_bytes": 83552256,
@@ -814,8 +814,8 @@
         "variant": "B0",
         "seed": 2,
         "examples": 1000,
-        "wall_time_seconds": 25.189988526995876,
-        "postprocess_seconds": 0.02419519492832478,
+        "wall_time_seconds": 24.951346282003215,
+        "postprocess_seconds": 0.023766237660311162,
         "additional_forward_passes": 0,
         "act_steps_captured": 6,
         "peak_vram_bytes": 83339776,
@@ -830,9 +830,9 @@
     ],
     "additional_forward_passes": 0,
     "postprocess_only_overhead_seconds": [
-      0.025790246145334095,
-      0.023978598474059254,
-      0.02419519492832478
+      0.024515738419722766,
+      0.023727913823677227,
+      0.023766237660311162
     ]
   },
   "memory": {

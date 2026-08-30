@@ -1,0 +1,79 @@
+{
+  "configuration": {
+    "variant": "B0",
+    "halt_max_steps": 6,
+    "dataset": "data/sudoku-study-v1",
+    "split": "test",
+    "seeds_requested": [0, 1, 2],
+    "seeds_completed": []
+  },
+  "checkpoint_provenance": [
+    {
+      "seed": 0,
+      "checkpoint": "outputs/study/canonical/B0-seed0/step_28800.pt",
+      "exists": false,
+      "sha256": "MISSING"
+    },
+    {
+      "seed": 1,
+      "checkpoint": "outputs/study-4090/canonical/B0-seed1/step_28800.pt",
+      "exists": false,
+      "sha256": "MISSING"
+    },
+    {
+      "seed": 2,
+      "checkpoint": "outputs/study-4090/canonical/B0-seed2/step_28800.pt",
+      "exists": false,
+      "sha256": "MISSING"
+    }
+  ],
+  "method_definition": {
+    "final_step": "Use last ACT-step prediction (existing evaluator baseline).",
+    "confidence_selection": "argmax ACT step by mean token max-softmax confidence; tie -> later step.",
+    "cars": {
+      "lexicographic": [
+        "minimize clue_mismatch_count",
+        "minimize structural_violations (row+column+box duplicate excess)",
+        "maximize mean token confidence",
+        "tie -> later ACT step"
+      ],
+      "uses_ground_truth": false
+    },
+    "oracle_diagnostic": {
+      "label": "ORACLE DIAGNOSTIC - NOT AN INFERENCE METHOD",
+      "uses_ground_truth": true
+    }
+  },
+  "per_seed_summary": [],
+  "three_seed_aggregate": "MISSING",
+  "per_seed_exact_transitions": [],
+  "per_seed_cell_deltas": [],
+  "selected_step_distribution": [],
+  "earlier_exact_lost_by_final": [],
+  "cars_recovery": [],
+  "cars_damage": [],
+  "oracle_headroom": [],
+  "runtime": {
+    "additional_forward_passes": 0,
+    "note": "Run scripts/eval_cars_postprocess.py on server with frozen checkpoints."
+  },
+  "memory": {
+    "new_trainable_parameters": 0,
+    "checkpoint_changes": "none",
+    "extra_trajectory_storage": "cars_puzzles.jsonl per seed (6 ACT steps/puzzle)"
+  },
+  "statistical_tests": {
+    "mcnemar_per_seed": [],
+    "note": "Do not pool McNemar p-values across seeds."
+  },
+  "paper_table": [],
+  "missing_fields": [
+    "seed 0: checkpoint and inference not run in local clone",
+    "seed 1: checkpoint and inference not run in local clone",
+    "seed 2: checkpoint and inference not run in local clone",
+    "three_seed_aggregate",
+    "figures",
+    "scientific_interpretation (pending results)",
+    "optional ACT16 seed-0 sensitivity"
+  ]
+}

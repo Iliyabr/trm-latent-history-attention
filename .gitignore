@@ -35,3 +35,19 @@ results/baseline/**/metrics_step_*.json
 
 # Raw history-baseline evaluation metrics
 results/history-baselines/**/metrics_step_*.json
+
+# Local archival artifacts
+.local_archive/
+
+# Local experiment logs
+logs/
+
+# Raw CPU experiment runs; keep tracked summary statistics
+results/history-depth/*
+!results/history-depth/trm4-vs-trm8-depth-interaction.json
+
+results/history-multiseed/*
+!results/history-multiseed/trm4-multiseed-statistics.json
+
+# Canonical raw L-cycle run outputs are preserved locally
+results/lcycle-history/

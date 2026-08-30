@@ -62,11 +62,29 @@ Best exact, then best cell, then later step. **Uses labels — not deployable.**
 
 ## Checkpoints (frozen Vanilla ACT6)
 
-| Seed | Expected checkpoint | Eval metadata fallback |
-|------|---------------------|------------------------|
-| 0 | `outputs/study/canonical/B0-seed0/step_28800.pt` | `results/canonical-gpu/B0/seed_0/metadata.json` |
-| 1 | `outputs/study-4090/canonical/B0-seed1/step_28800.pt` | `results/canonical-gpu-4090/B0/seed_1/metadata.json` |
-| 2 | `outputs/study-4090/canonical/B0-seed2/step_28800.pt` | `results/canonical-gpu-4090/B0/seed_2/metadata.json` |
+Protocol §22: **one GPU/dtype regime per seed**. Checkpoints are on **different hosts**; do not expect all three under one `outputs/` tree.
+
+| Seed | Host | Training root | Checkpoint (repo-relative) | Eval metadata |
+|------|------|---------------|------------------------------|---------------|
+| 0 | 1080 Ti (`mahyar@development`) | `outputs/study/` | `outputs/study/canonical/B0-seed0/step_28800.pt` | `results/canonical-gpu/B0/seed_0/metadata.json` |
+| 1 | RTX 4090 (`gholami@…`) | `outputs/study-4090/` | `outputs/study-4090/canonical/B0-seed1/step_28800.pt` | `results/canonical-gpu-4090/B0/seed_1/metadata.json` |
+| 2 | RTX 4090 (`gholami@…`) | `outputs/study-4090/` | `outputs/study-4090/canonical/B0-seed2/step_28800.pt` | `results/canonical-gpu-4090/B0/seed_2/metadata.json` |
+
+**On `mahyar@development` only seed 0 exists.** `outputs/study-4090/…` is for the 4090 box; `ls` there on the 1080 Ti will correctly show “file not found”.
+
+Verify on the **correct** host (script also accepts legacy `outputs/canonical/` if `outputs/study/` is absent):
+
+```bash
+# 1080 Ti (seed 0 only)
+ls -la outputs/study/canonical/B0-seed0/step_28800.pt \
+     outputs/canonical/B0-seed0/step_28800.pt
+
+# RTX 4090 (seeds 1–2)
+ls -la outputs/study-4090/canonical/B0-seed1/step_28800.pt
+ls -la outputs/study-4090/canonical/B0-seed2/step_28800.pt
+```
+
+Result dirs use `seed_1` / `seed_2` (underscore); training dirs use `B0-seed1` / `B0-seed2` (no underscore). That is intentional.
 
 Verify SHA256 before/after run (recorded in output metadata).
 
@@ -74,22 +92,24 @@ Verify SHA256 before/after run (recorded in output metadata).
 
 ## Server run commands
 
-From repo root with venv + dataset + checkpoints present:
+Run **one seed per machine** (or copy checkpoints locally and pass explicit `--checkpoint` paths).
 
 ```bash
-# Full run (all three seeds)
-python scripts/eval_cars_postprocess.py \
-  --seeds 0 1 2 \
-  --data data/sudoku-study-v1 \
-  --config config/experiment/sudoku_study_canonical.yaml
+# 1080 Ti — seed 0 only
+python scripts/eval_cars_postprocess.py --seeds 0 --device cuda
 
-# Explicit checkpoint overrides (if paths differ)
-python scripts/eval_cars_postprocess.py \
-  --checkpoint 0=outputs/study/canonical/B0-seed0/step_28800.pt \
-  --checkpoint 1=outputs/study-4090/canonical/B0-seed1/step_28800.pt \
-  --checkpoint 2=outputs/study-4090/canonical/B0-seed2/step_28800.pt
+# RTX 4090 — seed 1
+python scripts/eval_cars_postprocess.py --seeds 1 --device cuda
 
-# Re-analyze cached trajectories only (no GPU)
+# RTX 4090 — seed 2
+python scripts/eval_cars_postprocess.py --seeds 2 --device cuda
+```
+
+The script resolves repo-relative paths from committed `metadata.json` (strips `/home/mahyar/…` vs `/home/gholami/…`).
+
+After all three `seed_{N}/cars_puzzles.jsonl` exist (copy into one clone if needed):
+
+```bash
 python scripts/eval_cars_postprocess.py --analyze-only
 ```
 

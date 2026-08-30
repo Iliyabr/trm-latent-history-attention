@@ -43,6 +43,8 @@ ema_rate: 0.999
 freeze_weights: false
 project_name: trm-latent-history-canonical-8h
 run_name: null
+load_checkpoint: null
+resume_checkpoint: null
 checkpoint_path: null
 metrics_dir: null
 metrics_jsonl: null

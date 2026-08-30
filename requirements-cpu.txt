@@ -1,4 +1,4 @@
-# Install a CPU build of PyTorch separately first; see CPU_LOCAL.md.
+# Install a CPU build of PyTorch separately first; see docs/CPU_LOCAL.md.
 numpy==1.26.4
 einops==0.8.1
 tqdm==4.67.1

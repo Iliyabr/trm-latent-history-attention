@@ -158,14 +158,65 @@ def run_cars_inference(
     return rows, metadata
 
 
+def _repo_relative_checkpoint(raw: str, repo_root: Path) -> Path:
+    """Map committed eval metadata paths to this clone (strip foreign home dirs)."""
+    path = Path(raw)
+    if not path.is_absolute():
+        return path
+    repo_name = repo_root.name
+    for index, part in enumerate(path.parts):
+        if part == repo_name and index + 1 < len(path.parts):
+            return Path(*path.parts[index + 1 :])
+    for index, part in enumerate(path.parts):
+        if part == "outputs":
+            return Path(*path.parts[index:])
+    return path
+
+
+def _checkpoint_search_paths(relative: Path, repo_root: Path) -> list[Path]:
+    """Ordered candidates: metadata path, legacy outputs/canonical layout, defaults."""
+    rel_posix = relative.as_posix()
+    variants = [relative]
+    if rel_posix.startswith("outputs/study/"):
+        variants.append(Path(rel_posix.replace("outputs/study/", "outputs/", 1)))
+    elif rel_posix.startswith("outputs/"):
+        variants.append(Path("outputs/study/" + rel_posix.removeprefix("outputs/")))
+    seen: set[str] = set()
+    ordered: list[Path] = []
+    for variant in variants:
+        candidate = variant if variant.is_absolute() else repo_root / variant
+        key = candidate.as_posix()
+        if key not in seen:
+            seen.add(key)
+            ordered.append(candidate)
+    return ordered
+
+
 def resolve_checkpoint(seed: int, explicit: Path | None, repo_root: Path) -> Path:
     if explicit is not None:
-        return explicit
+        candidates = _checkpoint_search_paths(explicit, repo_root)
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
+
+    candidates: list[Path] = []
     meta_path = repo_root / METADATA_FALLBACK[seed]
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        return Path(str(meta["checkpoint"]))
-    return repo_root / DEFAULT_CHECKPOINTS[seed]
+        relative = _repo_relative_checkpoint(str(meta["checkpoint"]), repo_root)
+        candidates.extend(_checkpoint_search_paths(relative, repo_root))
+    candidates.extend(_checkpoint_search_paths(DEFAULT_CHECKPOINTS[seed], repo_root))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = candidate.as_posix()
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def load_rows(path: Path) -> list[dict[str, Any]]:

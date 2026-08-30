@@ -1,0 +1,8 @@
+date=2026-08-29T19:50:56Z
+script=run_canonical_8h_server.sh
+seed=0
+max_runtime_minutes_default=480
+train_all_runtime_minutes=120
+arch=mlp_t=false,pos_encodings=rope,halt_max_steps=16
+git=78b78d8c59e650dea810692be821475dd4ceafb6
+GPU 0: NVIDIA GeForce GTX 1080 Ti (UUID: GPU-b9d92eb9-e4dc-c879-8044-b66819c78e46)

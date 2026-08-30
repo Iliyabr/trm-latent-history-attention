@@ -63,7 +63,8 @@ def command_for(
         *VARIANT_OVERRIDES[variant],
     ]
     if resume is not None:
-        command.append(f"resume_checkpoint={resume.as_posix()}")
+        # Hydra struct configs omit resume_checkpoint until appended with +.
+        command.append(f"+resume_checkpoint={resume.as_posix()}")
     command.extend(extras)
     return command, run_dir
 

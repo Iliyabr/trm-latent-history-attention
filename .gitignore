@@ -27,6 +27,14 @@ outputs/canonical/**/metrics/
 outputs/canonical/**/metrics_step_*.json
 outputs/canonical/**/trm.py
 outputs/canonical/**/losses.py
+!outputs/study-8h/
+outputs/study-8h/**/*
+!outputs/study-8h/**/
+!outputs/study-8h/**/*
+outputs/study-8h/**/metrics/
+outputs/study-8h/**/metrics_step_*.json
+outputs/study-8h/**/trm.py
+outputs/study-8h/**/losses.py
 wandb/
 results/raw/
 *.pt

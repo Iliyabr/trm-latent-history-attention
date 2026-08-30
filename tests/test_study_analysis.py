@@ -1,5 +1,8 @@
 import contextlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -229,3 +232,26 @@ def test_synthetic_artifacts_aggregate_and_write_outputs(tmp_path: Path):
     assert json.loads((output / "analysis.json").read_text())["comparisons"]
     for name in ("accuracy", "compute", "corruption", "attention", "learning_curves"):
         assert (output / f"{name}.pdf").stat().st_size > 0
+
+
+def test_evaluate_study_imports_pretrain_without_repo_pythonpath():
+    repo = Path(__file__).resolve().parents[1]
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() != "PYTHONPATH"
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import evaluate_study, pretrain; print(pretrain.__file__)",
+        ],
+        cwd=str(repo / "experiments"),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "pretrain.py" in result.stdout.replace("\\", "/")

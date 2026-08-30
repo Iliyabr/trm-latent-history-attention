@@ -1,0 +1,17 @@
+{
+  "variant": "B0",
+  "seed": 0,
+  "examples": 1000,
+  "wall_time_seconds": 19.90028196599451,
+  "postprocess_seconds": 0.025790246145334095,
+  "additional_forward_passes": 0,
+  "act_steps_captured": 6,
+  "peak_vram_bytes": 121091584,
+  "checkpoint": "/home/mahyar/trm-latent-history-attention/outputs/study/canonical/B0-seed0/step_28800.pt",
+  "checkpoint_sha256": "de10685c2f21d38450c6e07b7498c420997cac7607a75b346f5b99cb8e68096b",
+  "checkpoint_load": {
+    "matched_keys": 15,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

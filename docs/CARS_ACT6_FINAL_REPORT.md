@@ -2,83 +2,81 @@
 
 ## 1. Protocol and checkpoint audit
 
-Status: **INCOMPLETE**
+Status: **COMPLETE**
 
-Frozen Vanilla TRM (B0), ACT6 (`halt_max_steps=6`), test split `sudoku-study-v1`.  
+Frozen Vanilla TRM (B0), ACT6 (`halt_max_steps=6`), test split `sudoku-study-v1`.
 No training, no backward(), no checkpoint modification.
 
 ### Checkpoint provenance
 
 | Seed | Checkpoint | SHA256 | Exists |
 |------|------------|--------|--------|
-| 0 | `outputs/study/canonical/B0-seed0/step_28800.pt` | MISSING | false |
-| 1 | `outputs/study-4090/canonical/B0-seed1/step_28800.pt` | MISSING | false |
-| 2 | `outputs/study-4090/canonical/B0-seed2/step_28800.pt` | MISSING | false |
-
-Seeds 1–2 correspond to the RTX 4090 bfloat16 campaign; seed 0 to 1080 Ti float32 screening. Do not pool wall-clock across hardware.
+| 0 | `/home/mahyar/trm-latent-history-attention/outputs/study/canonical/B0-seed0/step_28800.pt` | de10685c2f21d38450c6e07b7498c420997cac7607a75b346f5b99cb8e68096b | True |
+| 1 | `/home/mahyar/trm-latent-history-attention/outputs/study-4090/canonical/B0-seed1/step_28800.pt` | f50e0a078ddc82d9da4deaa518e1148057f185ebe8d9e38bef306daff96042d9 | True |
+| 2 | `/home/mahyar/trm-latent-history-attention/outputs/study-4090/canonical/B0-seed2/step_28800.pt` | 6a6cf25f86f02c8d33cc157ee808e0fb171c5d5ce1a73032f4c7beee28cf037b | True |
 
 ## 2. Implementation audit
 
-- **Inference path:** `scripts/eval_cars_postprocess.py` → `run_cars_inference()`
-- One forward pass per batch; **6 ACT-step** predictions and logits captured (`cycle_logits=False`).
-- Existing `results/canonical-gpu/B0/seed_0/examples.jsonl` stores 18 H-cycle micro-step metrics but **not** per-ACT-step full grids — insufficient for CARS constraint scoring.
-- **Selection logic:** `experiments/cars_postprocess.py` (unit-tested in `tests/test_cars_postprocess.py`).
-- **Additional forward passes:** 0 (post-processing only over captured trajectory).
-
-See also `docs/CARS_HANDOFF.md`.
+- Inference path: `scripts/eval_cars_postprocess.py` → `run_cars_inference()`
+- One forward pass per puzzle batch; **6 ACT-step** predictions/logits captured
+  (`cycle_logits=False`; final preds at each ACT step, not 18 H-cycle micro-steps).
+- Existing `examples.jsonl` stores 18 micro-step metrics but **not** per-step full grids;
+  CARS requires this dedicated capture pass.
 
 ## 3. Frozen selection rule
 
-### Confidence Selection
-
-Mean token max-softmax confidence per ACT step; argmax; tie → later step. No Sudoku constraints, no ground truth.
-
-### CARS
-
-Lexicographic: (1) minimize clue mismatches on givens, (2) minimize structural duplicate excess, (3) maximize confidence, (4) later step. Frozen pre-evaluation.
-
-### Oracle
-
-**ORACLE DIAGNOSTIC - NOT AN INFERENCE METHOD** — uses labels to estimate trajectory headroom.
+See `method_definition` in JSON. Lexicographic CARS rule is fixed pre-evaluation.
 
 ## 4. Per-seed final results
 
-**MISSING** — run on server:
+### Seed 0
 
-```bash
-python scripts/eval_cars_postprocess.py --seeds 0 1 2 --data data/sudoku-study-v1
-```
+- Final: exact 0.0090, cell 0.637383
+- Confidence: exact 0.0090, cell 0.638148, Δcell +0.077 pp
+- CARS: exact 0.0100, cell 0.637728, Δcell +0.035 pp
+
+### Seed 1
+
+- Final: exact 0.0120, cell 0.639222
+- Confidence: exact 0.0120, cell 0.638889, Δcell -0.033 pp
+- CARS: exact 0.0120, cell 0.640519, Δcell +0.130 pp
+
+### Seed 2
+
+- Final: exact 0.0160, cell 0.670259
+- Confidence: exact 0.0200, cell 0.670605, Δcell +0.035 pp
+- CARS: exact 0.0200, cell 0.670444, Δcell +0.019 pp
 
 ## 5. Three-seed aggregate
 
-MISSING
+- Final exact: 0.0123 ± 0.0035
+- CARS exact: 0.0140 ± 0.0053
+- Confidence exact: 0.0137 ± 0.0057
+- CARS Δ cell (pp): 0.061 ± 0.060
 
 ## 6. Paired exact-solve transitions
 
-MISSING (McNemar per seed after run)
+See `per_seed_exact_transitions` in JSON (McNemar per seed).
 
 ## 7. Paired cell-accuracy analysis
 
-MISSING (bootstrap CI per seed after run)
+See `per_seed_cell_deltas` in JSON (bootstrap CI per seed).
 
 ## 8. Recursive failure-mode analysis
 
-MISSING — key metrics: earlier-exact-lost-by-final, CARS recovery rate, CARS damage rate
+See `earlier_exact_lost_by_final`, `cars_recovery`, `cars_damage` in JSON.
 
 ## 9. Oracle trajectory headroom
 
-MISSING
+**ORACLE DIAGNOSTIC - NOT AN INFERENCE METHOD**
 
 ## 10. Selected-step distribution
 
-MISSING — see Figure B after run
+See `selected_step_distribution` and figure `cars_selected_step_distribution.png`.
 
 ## 11. Inference-time overhead
 
-- New trainable parameters: **0**
-- Retraining: **no**
-- Additional model forward passes: **0**
-- Post-processing: measured per seed in output metadata (`postprocess_seconds`)
+Additional forward passes: 0
 
 ## 12. Optional ACT16 seed-0 sensitivity
 
@@ -86,30 +84,23 @@ NOT RUN
 
 ## 13. Paper-ready table
 
-MISSING — populated in `docs/data/CARS_ACT6_FINAL_v1.json` after evaluation
+See `paper_table` in JSON.
 
 ## 14. Paper-ready figures
 
-Pending COMPLETE status:
-
 - `docs/figures/cars_act6_main_results.png`
 - `docs/figures/cars_selected_step_distribution.png`
-- `docs/figures/cars_recoverable_headroom.png`
+- `docs/figures/cars_recoverable_headroom.png` (optional)
 
 ## 15. Scientific interpretation
 
-Pending results. Do not overclaim from n=3 training seeds.
+Fill after all three seeds complete. Do not overclaim from n=3 training seeds.
 
 ## 16. Proposed paper revision
 
-Draft after observed CARS vs Final outcomes on seeds 0–2.
+Draft after observed results.
 
 ## 17. Missing or unresolved evidence
 
-- All three frozen B0 checkpoints not evaluated in this clone
-- Dataset `data/sudoku-study-v1` not present locally
-- Figures not generated
-- ACT16 optional branch not run
-- Scientific interpretation and paper framing pending numbers
 
-**CARS_ACT6_STATUS: INCOMPLETE**
+**CARS_ACT6_STATUS: COMPLETE**

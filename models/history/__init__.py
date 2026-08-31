@@ -7,7 +7,7 @@ from .last_state import LastStateHistory
 from .attention import HistoryAttention
 from .residual import ResidualHistory
 from .parameter_matched import ParameterMatchedNoHistory
-from .factory import build_history_aggregator, normalize_history_mode
+from .factory import build_history_aggregator, is_attention_mode, normalize_history_mode
 
 __all__ = [
     "HistoryAggregator",
@@ -20,5 +20,6 @@ __all__ = [
     "ResidualHistory",
     "ParameterMatchedNoHistory",
     "build_history_aggregator",
+    "is_attention_mode",
     "normalize_history_mode",
 ]

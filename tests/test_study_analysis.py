@@ -155,7 +155,7 @@ def test_intervention_discovery_scope_and_variant_matrix():
         assert model.inner.payload == ({"kind": "gaussian", "seed": 17}, 17)
     assert model.inner.payload is None
 
-    for variant in ("B0", "B1", "B2", "B3", "P1"):
+    for variant in ("B0", "B1", "B2", "B3", "P1", "P1ns"):
         specs = intervention_specs(variant)
         assert [item["sigma_rms"] for item in specs if item["kind"] == "gaussian"] == [
             0.05,
@@ -163,7 +163,7 @@ def test_intervention_discovery_scope_and_variant_matrix():
             0.20,
         ]
         deletions = [item for item in specs if item["kind"] == "delete"]
-        assert len(deletions) == (2 if variant == "P1" else 0)
+        assert len(deletions) == (2 if variant in {"P1", "P1ns"} else 0)
 
 
 def test_nested_experiment_config_resolves_ancestor_arch(tmp_path: Path):

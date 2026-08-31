@@ -15,6 +15,10 @@ class HistoryAttention(HistoryAggregator):
 
     Canonical (protocol v1) Q/K/V path:
         q = W_Q RMSNorm_D(z),  k/v = W_{K/V} RMSNorm_D(h_i)
+
+    Readout:
+        use_skip=True  (P1):   RMSNorm(z + σ(g)·memory)
+        use_skip=False (P1ns): RMSNorm(memory)  — no residual onto current z
     """
 
     def __init__(
@@ -25,6 +29,7 @@ class HistoryAttention(HistoryAggregator):
         window: int = 0,
         norm_eps: float = 1e-5,
         gate_init: float = -2.0,
+        use_skip: bool = True,
     ) -> None:
         super().__init__()
         if rank <= 0 or num_heads <= 0 or rank % num_heads:
@@ -35,11 +40,14 @@ class HistoryAttention(HistoryAggregator):
         self.head_dim = rank // num_heads
         self.window = window
         self.norm_eps = norm_eps
+        self.use_skip = use_skip
 
         self.q_proj = CastedLinear(hidden_size, rank, bias=False)
         self.k_proj = CastedLinear(hidden_size, rank, bias=False)
         self.v_proj = CastedLinear(hidden_size, rank, bias=False)
         self.o_proj = CastedLinear(rank, hidden_size, bias=False)
+        # Kept for parameter parity with P1 even when use_skip=False
+        # (scalar gate is absorbed by RMSNorm without a residual).
         self.gate_logit = nn.Parameter(torch.tensor(float(gate_init)))
 
     def _lengths(
@@ -167,9 +175,14 @@ class HistoryAttention(HistoryAggregator):
         )
 
         gate = torch.sigmoid(self.gate_logit).to(current_z.dtype)
-        output = rms_norm(
-            current_z + gate * memory, variance_epsilon=self.norm_eps
-        )
+        if self.use_skip:
+            # Canonical P1: residual skip then RMSNorm.
+            output = rms_norm(
+                current_z + gate * memory, variance_epsilon=self.norm_eps
+            )
+        else:
+            # P1ns ablation: RMSNorm only the attention readout (no z + ·).
+            output = rms_norm(memory, variance_epsilon=self.norm_eps)
         output = torch.where(has_history[:, None, None], output, current_z)
 
         if not return_diagnostics:
@@ -181,6 +194,9 @@ class HistoryAttention(HistoryAggregator):
                 .sum(dim=-1).mean()
             ).detach(),
             "gate": gate.detach(),
+            "use_skip": torch.tensor(
+                float(self.use_skip), device=current_z.device
+            ),
             "deleted_state_index": deleted_index.detach(),
         }
         return output, diagnostics

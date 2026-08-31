@@ -29,6 +29,10 @@ def normalize_history_mode(name: str) -> str:
         "temporal_attention": "attention",
         "p1": "attention",
         "attention": "attention",
+        "attention_no_skip": "attention_no_skip",
+        "p1ns": "attention_no_skip",
+        "p1_no_skip": "attention_no_skip",
+        "p1noskip": "attention_no_skip",
         "parameter_matched": "parameter_matched",
         "param_matched": "parameter_matched",
         "b3": "parameter_matched",
@@ -36,6 +40,12 @@ def normalize_history_mode(name: str) -> str:
         "latest": "static_lag",
     }
     return aliases.get(normalized, normalized)
+
+
+def is_attention_mode(name: str) -> bool:
+    """True for P1 and the no-skip ablation (shared KV-cache path)."""
+    mode = normalize_history_mode(name)
+    return mode in {"attention", "attention_no_skip"}
 
 
 def build_history_aggregator(
@@ -62,7 +72,13 @@ def build_history_aggregator(
         return LastStateHistory()
     if mode == "attention":
         return HistoryAttention(
-            hidden_size, rank, num_heads, window, norm_eps, gate_init
+            hidden_size, rank, num_heads, window, norm_eps, gate_init,
+            use_skip=True,
+        )
+    if mode == "attention_no_skip":
+        return HistoryAttention(
+            hidden_size, rank, num_heads, window, norm_eps, gate_init,
+            use_skip=False,
         )
     if mode == "parameter_matched":
         return ParameterMatchedNoHistory(
@@ -70,5 +86,6 @@ def build_history_aggregator(
         )
     raise ValueError(
         f"Unknown history mode {name!r}; expected none/B0, residual/B1, "
-        "uniform/B2, gated/Gated, attention/P1, parameter_matched/B3, or static_lag"
+        "uniform/B2, gated/Gated, attention/P1, attention_no_skip/P1ns, "
+        "parameter_matched/B3, or static_lag"
     )

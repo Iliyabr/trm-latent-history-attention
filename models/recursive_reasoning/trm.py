@@ -10,7 +10,7 @@ import random
 from models.common import trunc_normal_init_
 from models.layers import rms_norm, LinearSwish, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
 from models.sparse_embedding import CastedSparseEmbedding
-from models.history import build_history_aggregator, normalize_history_mode
+from models.history import build_history_aggregator, is_attention_mode, normalize_history_mode
 
 IGNORE_LABEL_ID = -100
 
@@ -278,14 +278,15 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         history = [z_L]
         records: Dict[str, List[torch.Tensor]] = {}
         kv_cache = None
-        if self.history_mode == "attention":
+        attention_mode = is_attention_mode(self.history_mode)
+        if attention_mode:
             kv_cache = self.history_aggregator.append_kv(None, z_L)
         for _L_step in range(self.config.L_cycles):
-            # P1 reads projected cache directly; other ablations consume raw
+            # P1 / P1ns read projected cache directly; other ablations consume raw
             # states and therefore materialize the short temporal stack.
             stacked = (
                 z_L.unsqueeze(1)
-                if self.history_mode == "attention"
+                if attention_mode
                 else torch.stack(history, dim=1)
             )
             if self.history_mode == "residual":
@@ -295,7 +296,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 z_L = self.history_aggregator(update, stacked)
             else:
                 diagnostics_requested = (
-                    self.history_mode == "attention"
+                    attention_mode
                     and analysis is not None and (
                     analysis.get("attention_weights", False)
                     or analysis.get("attention_stats", False)
@@ -312,7 +313,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                         and deletion.get("l_step", _L_step) == _L_step
                     ):
                         delete_state = deletion["kind"]
-                if self.history_mode == "attention":
+                if attention_mode:
                     lengths = torch.full(
                         (z_L.shape[0],), kv_cache[0].shape[1],
                         dtype=torch.long, device=z_L.device
@@ -382,7 +383,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 records.setdefault("intermediate_logits", []).append(
                     intermediate
                 )
-            if self.history_mode == "attention":
+            if attention_mode:
                 kv_cache = self.history_aggregator.append_kv(kv_cache, z_L)
             else:
                 history.append(z_L)

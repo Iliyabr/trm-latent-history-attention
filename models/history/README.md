@@ -13,7 +13,8 @@ History never crosses an H-cycle or ACT boundary.
 |----|-------------|----------|
 | B0 | `none` | Vanilla TRM (identity) |
 | Gated | `gated` | Mean of RMSNorm'd history; `z + σ(g)·context` then RMSNorm; gate init −2 |
-| P1 | `attention` | Low-rank temporal attention; **pre-QKV** `W RMSNorm_D(·)`; gate init −2 |
+| P1 | `attention` | Low-rank temporal attention; **pre-QKV** `W RMSNorm_D(·)`; readout `RMSNorm(z + σ(g)·memory)`; gate init −2 |
+| P1ns | `attention_no_skip` | Same attention as P1, but readout is `RMSNorm(memory)` only (no residual onto current `z`) |
 | B3 | `parameter_matched` | No history; `D→2r→D` gated side path; **exactly** `4·D·r+1` params |
 
 ## Legacy (screening only; not protocol controls)

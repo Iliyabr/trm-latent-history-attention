@@ -15,7 +15,8 @@ from typing import Sequence
 # Canonical protocol v1 family (primary).
 CANONICAL_VARIANTS = ("B0", "Gated", "P1", "B3")
 # Legacy Colab screening labels (B1 residual, B2 ungated uniform) still launchable.
-VARIANTS = ("B0", "B1", "B2", "B3", "P1", "Gated")
+# P1ns = P1 attention without residual skip before RMSNorm.
+VARIANTS = ("B0", "B1", "B2", "B3", "P1", "P1ns", "Gated")
 SEEDS = (0, 1, 2)
 VARIANT_OVERRIDES = {
     "B0": ("arch.history_enabled=false", "arch.history_mode=B0"),
@@ -23,6 +24,7 @@ VARIANT_OVERRIDES = {
     "B2": ("arch.history_enabled=true", "arch.history_mode=B2"),
     "B3": ("arch.history_enabled=true", "arch.history_mode=B3"),
     "P1": ("arch.history_enabled=true", "arch.history_mode=P1"),
+    "P1ns": ("arch.history_enabled=true", "arch.history_mode=P1ns"),
     "Gated": ("arch.history_enabled=true", "arch.history_mode=Gated"),
 }
 

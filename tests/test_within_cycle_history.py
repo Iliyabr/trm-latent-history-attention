@@ -149,6 +149,32 @@ def test_b0_is_exact_vanilla_and_old_config_alias_loads():
     assert torch.equal(first[1], second[1])
 
 
+def test_attention_no_skip_drops_residual_onto_current_z():
+    torch.manual_seed(0)
+    skip = HistoryAttention(8, rank=4, num_heads=2, use_skip=True)
+    no_skip = HistoryAttention(8, rank=4, num_heads=2, use_skip=False)
+    no_skip.load_state_dict(skip.state_dict())
+    current = torch.randn(2, 3, 8)
+    history = torch.randn(2, 4, 3, 8)
+    with_skip = skip(current, history)
+    without = no_skip(current, history)
+    assert with_skip.shape == without.shape == current.shape
+    assert not torch.allclose(with_skip, without, atol=1e-5)
+    # No-skip readout is RMS-normalized attention memory only.
+    assert torch.allclose(
+        without.float().square().mean(-1),
+        torch.ones(2, 3),
+        atol=2e-5,
+    )
+    factory = build_history_aggregator(
+        "P1ns", hidden_size=8, rank=4, num_heads=2
+    )
+    assert factory.use_skip is False
+    assert build_history_aggregator(
+        "P1", hidden_size=8, rank=4, num_heads=2
+    ).use_skip is True
+
+
 def test_parameter_matched_matches_p1_added_parameters_exactly():
     base = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("none"))
     attention = TinyRecursiveReasoningModel_ACTV1_Inner(tiny_config("attention"))
@@ -182,6 +208,15 @@ def test_factory_names_and_invalid_rank():
     assert build_history_aggregator("B0").__class__.__name__ == "NoHistoryAggregator"
     assert build_history_aggregator("B1").__class__.__name__ == "ResidualHistory"
     assert build_history_aggregator("B2").__class__.__name__ == "UniformMeanHistory"
+    assert build_history_aggregator(
+        "P1", hidden_size=8, rank=4, num_heads=2
+    ).use_skip is True
+    assert build_history_aggregator(
+        "P1ns", hidden_size=8, rank=4, num_heads=2
+    ).use_skip is False
+    assert build_history_aggregator(
+        "attention_no_skip", hidden_size=8, rank=4, num_heads=2
+    ).use_skip is False
     assert build_history_aggregator("Gated").__class__.__name__ == "GatedHistory"
     assert (
         build_history_aggregator("B3", hidden_size=16, rank=8).__class__.__name__

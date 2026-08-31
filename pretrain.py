@@ -296,12 +296,32 @@ def _rng_state() -> dict[str, Any]:
     return state
 
 
+def _as_cpu_byte_tensor(value: Any) -> torch.Tensor:
+    """torch.set_rng_state requires a CPU ByteTensor; resume loads may move it to CUDA."""
+    if isinstance(value, torch.Tensor):
+        tensor = value.detach().to("cpu")
+    else:
+        tensor = torch.as_tensor(value)
+        if not isinstance(tensor, torch.Tensor):
+            tensor = torch.tensor(value)
+        tensor = tensor.cpu()
+    if tensor.dtype != torch.uint8:
+        tensor = tensor.to(dtype=torch.uint8)
+    return tensor.contiguous()
+
+
 def _restore_rng_state(state: dict[str, Any]) -> None:
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    torch.random.set_rng_state(state["torch"])
+    torch.random.set_rng_state(_as_cpu_byte_tensor(state["torch"]))
     if "cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["cuda"])
+        cuda_states = state["cuda"]
+        if isinstance(cuda_states, (list, tuple)):
+            torch.cuda.set_rng_state_all(
+                [_as_cpu_byte_tensor(item) for item in cuda_states]
+            )
+        else:
+            torch.cuda.set_rng_state(_as_cpu_byte_tensor(cuda_states))
 
 
 def save_train_state(
@@ -388,7 +408,10 @@ def restore_train_state(
     if ema_helper is not None and payload.get("ema") is not None:
         ema_helper.load_state_dict(payload["ema"])
     if payload.get("rng_state"):
-        _restore_rng_state(payload["rng_state"])
+        try:
+            _restore_rng_state(payload["rng_state"])
+        except Exception as exc:  # noqa: BLE001 — resume must not die on RNG alone
+            print(f"WARNING: could not restore RNG state ({exc}); continuing with fresh RNG")
     return dict(payload.get("extra") or {})
 
 

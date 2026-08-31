@@ -9,8 +9,8 @@
 # float32 (1080 Ti). Train P1ns only; compare later to existing ACT6 / ACT16 P1.
 #
 # Wall plan (~8 h total on 1080 Ti):
-#   L=6  train  ~2.5 h  (matches / exceeds ACT6 screening length)
-#   L=10 train  ~3.5 h  (extra inner cycles cost more per step)
+#   L=6  train  ~4.0 h  (refined; wall-clock limited, epochs=8192)
+#   L=10 train  ~3.5 h
 #   eval both   ~minutes
 #
 # Usage (repo root, venv active):
@@ -26,8 +26,9 @@
 #
 # Environment overrides:
 #   SEED=0
-#   RUNTIME_L6_MINUTES=150
+#   RUNTIME_L6_MINUTES=240
 #   RUNTIME_L10_MINUTES=210
+#   EPOCHS=8192   # must stay >> wall budget so the clock stops training, not epochs
 
 set -euo pipefail
 
@@ -38,7 +39,8 @@ PRESET=canonical
 VARIANT=P1ns
 SEED="${SEED:-0}"
 HALT_MAX_STEPS=6
-RUNTIME_L6_MINUTES="${RUNTIME_L6_MINUTES:-150}"
+EPOCHS="${EPOCHS:-8192}"
+RUNTIME_L6_MINUTES="${RUNTIME_L6_MINUTES:-240}"
 RUNTIME_L10_MINUTES="${RUNTIME_L10_MINUTES:-210}"
 EVAL_OUT=results/p1ns-act6
 
@@ -116,6 +118,7 @@ print("gpu", torch.cuda.get_device_name(0))
 print("variant", "${VARIANT}")
 print("halt_max_steps", ${HALT_MAX_STEPS})
 print("jobs", "L6=${L_CYCLES_FOR[L6]} (${RUNTIME_L6_MINUTES} min), L10=${L_CYCLES_FOR[L10]} (${RUNTIME_L10_MINUTES} min)")
+print("epochs", ${EPOCHS}, "(wall clock should stop first)")
 print("preset", "${PRESET}")
 PY
   for job in "${JOBS[@]}"; do
@@ -129,6 +132,7 @@ PY
     echo "variant=${VARIANT}"
     echo "history_mode=P1ns (attention_no_skip)"
     echo "halt_max_steps=${HALT_MAX_STEPS}"
+    echo "epochs=${EPOCHS}"
     echo "L6_cycles=${L_CYCLES_FOR[L6]} runtime_min=${RUNTIME_L6_MINUTES} root=${OUTPUT_ROOT_FOR[L6]}"
     echo "L10_cycles=${L_CYCLES_FOR[L10]} runtime_min=${RUNTIME_L10_MINUTES} root=${OUTPUT_ROOT_FOR[L10]}"
     echo "ablation=RMSNorm(memory) without residual z + gate*memory"
@@ -165,6 +169,7 @@ cmd_train_one() {
     --output-root "$out_root" \
     --override "arch.L_cycles=${l}" \
     --override "arch.halt_max_steps=${HALT_MAX_STEPS}" \
+    --override "epochs=${EPOCHS}" \
     --override checkpoint_every_eval=false \
     --override compile_model=false \
     --override dataloader_num_workers=1 \
@@ -201,6 +206,7 @@ cmd_resume() {
     --checkpoint "$ckpt" \
     --override "arch.L_cycles=${l}" \
     --override "arch.halt_max_steps=${HALT_MAX_STEPS}" \
+    --override "epochs=${EPOCHS}" \
     --override checkpoint_every_eval=false \
     --override compile_model=false \
     --override dataloader_num_workers=1 \
@@ -289,9 +295,9 @@ usage: bash scripts/run_p1ns_act6_server.sh COMMAND [ARG]
 
   setup        GPU check + provenance
   data         build sudoku-study-v1 if missing
-  train-all    P1ns ACT6 L=6 then L=10 (~6 h train)
+  train-all    P1ns ACT6 L=6 (~4 h) then L=10 (~3.5 h); epochs=8192, wall-stopped
   train L6|L10 one job
-  resume L6|L10 continue after crash or cap
+  resume L6|L10 continue after crash or cap (keeps longer epoch budget)
   eval         test eval + comparison dump vs ACT6/ACT16
   all          setup + data + train-all + eval
 
@@ -300,6 +306,10 @@ Examples:
   git pull origin feature/latent-history-attention
   source .venv/bin/activate
   bash scripts/run_p1ns_act6_server.sh all
+
+  # Extend a run already past the short 1024-epoch screen:
+  git pull origin feature/latent-history-attention
+  bash scripts/run_p1ns_act6_server.sh resume L6
 EOF
     exit 2
     ;;

@@ -1,0 +1,35 @@
+{
+  "variant": "P1ns",
+  "seed": 0,
+  "metrics": {
+    "examples": 1000,
+    "exact_accuracy": 0.032,
+    "cell_accuracy": 0.675320987654321,
+    "incorrect_cells": 26.299,
+    "row_violations": 6.873,
+    "column_violations": 6.875,
+    "box_violations": 7.072
+  },
+  "wall_time_seconds": 43.87380883100559,
+  "inference_latency_seconds": {
+    "mean_batch": 1.0356169093133758,
+    "p50_batch": 1.0266742634994444
+  },
+  "throughput_examples_per_second": 30.175250827759328,
+  "parameters": {
+    "total": 1775619,
+    "trainable": 1775619
+  },
+  "peak_vram_bytes": 135576064,
+  "attention": {
+    "expected_lookback": 3.2965785960356393,
+    "non_adjacent_mass": 0.7084141693388423,
+    "entropy": 1.4568005930632353
+  },
+  "checkpoint": "/home/mahyar/trm-latent-history-attention/outputs/study-p1ns-act6-L10/canonical/P1ns-seed0/best_dev.pt",
+  "checkpoint_load": {
+    "matched_keys": 20,
+    "missing_keys": [],
+    "unexpected_keys": []
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "variant": "P1ns",
+  "seed": 0,
+  "preset": "canonical",
+  "command": [
+    "/home/mahyar/trm-latent-history-attention/.venv/bin/python",
+    "-u",
+    "pretrain.py",
+    "--config-name=experiment/sudoku_study_canonical",
+    "seed=0",
+    "run_name=P1ns-seed0",
+    "checkpoint_path=outputs/study-p1ns-act6-L6/canonical/P1ns-seed0",
+    "metrics_dir=outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/metrics",
+    "metrics_jsonl=outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/metrics.jsonl",
+    "arch.history_enabled=true",
+    "arch.history_mode=P1ns",
+    "+resume_checkpoint=/home/mahyar/trm-latent-history-attention/outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/best_dev.pt",
+    "arch.L_cycles=6",
+    "arch.halt_max_steps=6",
+    "epochs=8192",
+    "checkpoint_every_eval=false",
+    "compile_model=false",
+    "dataloader_num_workers=1",
+    "max_runtime_minutes=240"
+  ],
+  "started_utc": "2026-08-31T19:04:11.407424+00:00",
+  "finished_utc": "2026-08-31T23:07:57.240028+00:00",
+  "resume": "/home/mahyar/trm-latent-history-attention/outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/best_dev.pt",
+  "status": "completed",
+  "returncode": 0
+}

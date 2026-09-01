@@ -1,0 +1,67 @@
+arch:
+  H_cycles: 3
+  H_layers: 0
+  L_cycles: 6
+  L_layers: 2
+  expansion: 4
+  forward_dtype: float32
+  halt_exploration_prob: 0.1
+  halt_max_steps: 6
+  hidden_size: 256
+  history_enabled: true
+  history_gate_init: -2.0
+  history_heads: 4
+  history_mode: P1ns
+  history_rank: 64
+  history_window: 0
+  loss:
+    loss_type: stablemax_cross_entropy
+    name: losses@ACTLossHead
+  mlp_t: false
+  name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+  no_ACT_continue: true
+  num_heads: 4
+  pos_encodings: rope
+  puzzle_emb_len: 16
+  puzzle_emb_ndim: 256
+best_dev_metric: exact_accuracy
+best_dev_mode: max
+beta1: 0.9
+beta2: 0.95
+checkpoint_every_eval: false
+checkpoint_path: outputs/study-p1ns-act6-L6/canonical/P1ns-seed0
+compile_model: false
+cpu_threads: null
+data_paths:
+- data/sudoku-study-v1
+data_paths_test: []
+dataloader_num_workers: 1
+deterministic: true
+device: auto
+ema: true
+ema_rate: 0.999
+epochs: 8192
+eval_interval: 64
+eval_save_outputs: []
+eval_split: dev
+evaluators: []
+freeze_weights: false
+global_batch_size: 32
+load_checkpoint: null
+lr: 0.0001
+lr_min_ratio: 0.1
+lr_warmup_steps: 500
+max_runtime_minutes: 240.0
+metrics_dir: outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/metrics
+metrics_jsonl: outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/metrics.jsonl
+min_eval_interval: 0
+optimizer: adamw
+plateau_patience_evals: 20
+project_name: trm-latent-history-canonical
+puzzle_emb_lr: 0.01
+puzzle_emb_weight_decay: 0.1
+resume_checkpoint: /home/mahyar/trm-latent-history-attention/outputs/study-p1ns-act6-L6/canonical/P1ns-seed0/best_dev.pt
+run_name: P1ns-seed0
+seed: 0
+wandb_mode: disabled
+weight_decay: 0.1

@@ -1,0 +1,11 @@
+date=2026-08-31T18:55:53Z
+script=run_p1ns_act6_server.sh
+seed=0
+variant=P1ns
+history_mode=P1ns (attention_no_skip)
+halt_max_steps=6
+L6_cycles=6 runtime_min=150 root=outputs/study-p1ns-act6-L6
+L10_cycles=10 runtime_min=210 root=outputs/study-p1ns-act6-L10
+ablation=RMSNorm(memory) without residual z + gate*memory
+git=12a592a4a152386b01bc808852d7f9191314a538
+GPU 0: NVIDIA GeForce GTX 1080 Ti (UUID: GPU-b9d92eb9-e4dc-c879-8044-b66819c78e46)

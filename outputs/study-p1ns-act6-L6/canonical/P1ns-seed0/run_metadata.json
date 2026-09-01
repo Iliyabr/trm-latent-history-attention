@@ -1,0 +1,12 @@
+{
+  "config_sha256": "ee51de37c479e632eb5f6e3af3b918aed3a238f3baaaf955d550424a108655f1",
+  "cuda_version": "11.8",
+  "deterministic": true,
+  "device_type": "cuda",
+  "numpy": "2.5.2",
+  "python": "3.12.3",
+  "schema_version": 1,
+  "seed": 0,
+  "torch": "2.7.1+cu118",
+  "total_steps": 230400
+}

@@ -1,0 +1,29 @@
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+# Paper-style MLP-over-sequence L-stack (mlp_t), same D/H/L/ACT as canonical.
+halt_exploration_prob: 0.1
+halt_max_steps: 6
+H_cycles: 3
+L_cycles: 6
+H_layers: 0
+L_layers: 2
+hidden_size: 256
+num_heads: 4
+expansion: 4
+puzzle_emb_ndim: ${.hidden_size}
+# Upstream Sudoku MLP-t runs disable RoPE.
+pos_encodings: none
+forward_dtype: float32
+mlp_t: true
+puzzle_emb_len: 16
+no_ACT_continue: true
+
+history_enabled: false
+history_mode: B0
+history_rank: 64
+history_heads: 4
+history_window: 0
+history_gate_init: -2.0

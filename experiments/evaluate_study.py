@@ -22,7 +22,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-VARIANTS = ("B0", "B1", "B2", "B3", "P1", "P1ns", "Gated")
+VARIANTS = ("B0", "B1", "B2", "B3", "P1", "P1ns", "P1nsMLP", "Gated")
 CORRUPTION_SIGMAS = (0.05, 0.10, 0.20)
 IGNORE_LABEL_ID = -100
 
@@ -253,7 +253,7 @@ def intervention_specs(variant: str) -> list[dict[str, Any]]:
         }
         for sigma in CORRUPTION_SIGMAS
     ]
-    if variant in {"P1", "P1ns"}:
+    if variant in {"P1", "P1ns", "P1nsMLP"}:
         result = [
             {"name": "delete_most_attended", "kind": "delete", "rank": "most"},
             {"name": "delete_least_attended", "kind": "delete", "rank": "least"},
@@ -271,7 +271,7 @@ def _analysis_request(
     intervention: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     request: dict[str, Any] = {"cycle_logits": True}
-    if variant in {"P1", "P1ns"}:
+    if variant in {"P1", "P1ns", "P1nsMLP"}:
         request.update(attention_weights=True, attention_stats=True)
     if intervention is None:
         return request

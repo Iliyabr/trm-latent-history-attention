@@ -27,7 +27,7 @@ git fetch origin
 git checkout feature/latent-history-attention
 git pull origin feature/latent-history-attention
 git log -1 --oneline
-ls scripts/run_canonical_8h_server.sh
+ls scripts/run_canonical_8h_server.sh scripts/run_lmix_noskip_server.sh
 ```
 
 If `git pull` leaves you on an old commit (e.g. `d37a107`) or new scripts are
@@ -143,6 +143,22 @@ python experiments/run_study.py single --preset colab_heavy --variant B0 --seed 
 ```
 
 When B0 finishes, run P1 the same way (`--variant P1`). One job at a time.
+
+### L-mix no-skip compare (B0 vs P1ns vs P1nsMLP)
+
+Matched ACT6 / H3 / L6 / D256 run that contrasts vanilla transformer L against
+no-skip history attention on **transformer** and **MLP** L-stacks
+(`mlp_t=true`, `pos_encodings=none`). Default wall budget is **18 h total**
+(**6 h per arm**; `epochs=8192`, clock stops first):
+
+```bash
+bash scripts/run_lmix_noskip_server.sh all
+# or stepwise: setup → data → train-all → eval → analyze
+# other total: TOTAL_RUNTIME_MINUTES=720 bash scripts/run_lmix_noskip_server.sh train-all
+```
+
+Artifacts: `outputs/study-lmix-noskip/`, `results/lmix-noskip/`, analysis under
+`results/lmix-noskip/analysis/`.
 
 If CUDA runs out of memory (11 GB vs T4 16 GB), add:
 

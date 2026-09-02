@@ -16,7 +16,8 @@ from typing import Sequence
 CANONICAL_VARIANTS = ("B0", "Gated", "P1", "B3")
 # Legacy Colab screening labels (B1 residual, B2 ungated uniform) still launchable.
 # P1ns = P1 attention without residual skip before RMSNorm.
-VARIANTS = ("B0", "B1", "B2", "B3", "P1", "P1ns", "Gated")
+# P1nsMLP = same history as P1ns; scripts set arch.mlp_t=true (paper MLP L-stack).
+VARIANTS = ("B0", "B1", "B2", "B3", "P1", "P1ns", "P1nsMLP", "Gated")
 SEEDS = (0, 1, 2)
 VARIANT_OVERRIDES = {
     "B0": ("arch.history_enabled=false", "arch.history_mode=B0"),
@@ -25,6 +26,12 @@ VARIANT_OVERRIDES = {
     "B3": ("arch.history_enabled=true", "arch.history_mode=B3"),
     "P1": ("arch.history_enabled=true", "arch.history_mode=P1"),
     "P1ns": ("arch.history_enabled=true", "arch.history_mode=P1ns"),
+    "P1nsMLP": (
+        "arch.history_enabled=true",
+        "arch.history_mode=P1nsMLP",
+        "arch.mlp_t=true",
+        "arch.pos_encodings=none",
+    ),
     "Gated": ("arch.history_enabled=true", "arch.history_mode=Gated"),
 }
 
@@ -135,7 +142,14 @@ def execute(
 def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--preset",
-        choices=("canonical", "canonical_8h", "colab", "colab_heavy", "publication"),
+        choices=(
+            "canonical",
+            "canonical_8h",
+            "lmix_noskip",
+            "colab",
+            "colab_heavy",
+            "publication",
+        ),
         default="canonical",
     )
     parser.add_argument(
@@ -180,6 +194,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def suite_variants(preset: str) -> tuple[str, ...]:
     if preset in ("canonical", "canonical_8h"):
         return CANONICAL_VARIANTS
+    if preset == "lmix_noskip":
+        return ("B0", "P1ns", "P1nsMLP")
     return ("B0", "B1", "B2", "B3", "P1")
 
 

@@ -115,6 +115,23 @@ def test_run_study_canonical_suite_is_four_models():
     assert "experiment/sudoku_study_canonical" in text
 
 
+def test_run_study_lmix_noskip_suite_is_three_models():
+    buffer = StringIO()
+    with patch("sys.stdout", buffer):
+        assert run_study_main(["suite", "--preset", "lmix_noskip", "--dry-run"]) == 0
+    text = buffer.getvalue()
+    for variant in ("B0", "P1ns", "P1nsMLP"):
+        assert f"run_name={variant}-seed0" in text
+    assert "run_name=P1-seed0" not in text
+    assert "experiment/sudoku_study_lmix_noskip" in text
+    command, _ = command_for(
+        "P1nsMLP", 0, "lmix_noskip", Path("outputs/study"), None, []
+    )
+    assert "arch.history_mode=P1nsMLP" in command
+    assert "arch.mlp_t=true" in command
+    assert "arch.pos_encodings=none" in command
+
+
 def test_hydra_study_presets_compose():
     with initialize_config_dir(version_base=None, config_dir=str(ROOT / "config")):
         colab = compose(
@@ -124,10 +141,17 @@ def test_hydra_study_presets_compose():
         publication = compose(config_name="experiment/sudoku_study_publication")
         heavy = compose(config_name="experiment/sudoku_study_colab_heavy")
         canonical = compose(config_name="experiment/sudoku_study_canonical")
+        lmix = compose(config_name="experiment/sudoku_study_lmix_noskip")
+        mlp_arch = compose(
+            config_name="experiment/sudoku_study_lmix_noskip",
+            overrides=["arch=trm_history_canonical_mlp"],
+        )
     colab_cfg = PretrainConfig(**OmegaConf.to_container(colab, resolve=True))
     publication_cfg = PretrainConfig(**OmegaConf.to_container(publication, resolve=True))
     heavy_cfg = PretrainConfig(**OmegaConf.to_container(heavy, resolve=True))
     canonical_cfg = PretrainConfig(**OmegaConf.to_container(canonical, resolve=True))
+    lmix_cfg = PretrainConfig(**OmegaConf.to_container(lmix, resolve=True))
+    mlp_cfg = PretrainConfig(**OmegaConf.to_container(mlp_arch, resolve=True))
     assert colab_cfg.arch.hidden_size == 256
     assert colab_cfg.arch.history_rank == 64
     assert colab_cfg.arch.H_cycles == 2
@@ -154,3 +178,8 @@ def test_hydra_study_presets_compose():
     assert canonical_cfg.optimizer == "adamw"
     assert canonical_cfg.compile_model is False
     assert canonical_cfg.max_runtime_minutes is None
+    assert lmix_cfg.epochs == 8192
+    assert lmix_cfg.arch.mlp_t is False
+    assert lmix_cfg.project_name == "trm-lmix-noskip-compare"
+    assert mlp_cfg.arch.mlp_t is True
+    assert mlp_cfg.arch.pos_encodings == "none"

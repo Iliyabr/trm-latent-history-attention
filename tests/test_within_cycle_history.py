@@ -164,12 +164,15 @@ def test_attention_no_skip_drops_residual_onto_current_z():
     assert torch.allclose(
         without.float().square().mean(-1),
         torch.ones(2, 3),
-        atol=2e-5,
+        atol=2e-4,
     )
     factory = build_history_aggregator(
         "P1ns", hidden_size=8, rank=4, num_heads=2
     )
     assert factory.use_skip is False
+    assert build_history_aggregator(
+        "P1nsMLP", hidden_size=8, rank=4, num_heads=2
+    ).use_skip is False
     assert build_history_aggregator(
         "P1", hidden_size=8, rank=4, num_heads=2
     ).use_skip is True

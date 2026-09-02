@@ -1,0 +1,58 @@
+# @package _global_
+defaults:
+  - /arch@arch: trm_history_canonical
+  - _self_
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+
+# Long matched compare: B0 vs P1ns (transformer L) vs P1nsMLP (paper MLP L).
+# Shell script sets mlp_t / pos_encodings per arm and the wall-clock cap.
+# Epochs are intentionally high so the runtime cap (not epoch budget) stops
+# training — gives history attention heads a long optimization window.
+
+data_paths: [data/sudoku-study-v1]
+data_paths_test: []
+eval_split: dev
+evaluators: []
+
+global_batch_size: 32
+epochs: 8192
+eval_interval: 64
+checkpoint_every_eval: true
+max_runtime_minutes: null
+
+lr: 1e-4
+lr_min_ratio: 0.1
+lr_warmup_steps: 500
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+puzzle_emb_lr: 1e-2
+puzzle_emb_weight_decay: 0.1
+optimizer: adamw
+
+seed: 0
+min_eval_interval: 0
+ema: true
+ema_rate: 0.999
+freeze_weights: false
+project_name: trm-lmix-noskip-compare
+run_name: null
+load_checkpoint: null
+resume_checkpoint: null
+checkpoint_path: null
+metrics_dir: null
+metrics_jsonl: null
+
+device: auto
+compile_model: false
+dataloader_num_workers: 1
+cpu_threads: null
+wandb_mode: disabled
+deterministic: true
+best_dev_metric: exact_accuracy
+best_dev_mode: max
+plateau_patience_evals: 20
